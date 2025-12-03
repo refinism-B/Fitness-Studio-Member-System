@@ -1,3 +1,4 @@
 DATABASE = "PERI_member_database.xlsx"
+MAIN_SHEET = "A_main"
 EVENT_SHEET = "B_event"
-MEMBER_SHEET = "A_main"
+MEMBER_SHEET = "C_member"
