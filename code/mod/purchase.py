@@ -111,13 +111,14 @@ def input_count(plan: str):
 def input_price(plan: str, count: int):
     """根據方案與堂數取得單價與總價"""
     df_menu = gr.GET_DF_FROM_DB(sheet=MENU)
-    df_menu["price"] = df_menu["price"].astype(int)
-    df_menu["total"] = df_menu["total"].astype(int)
+    df_menu["price"] = df_menu["price"].astype(float)
+    # df_menu["total"] = df_menu["total"].astype(int)
 
     mask1 = (df_menu["plan"] == plan)
     mask2 = (df_menu["count"] == count)
     price = df_menu[mask1 & mask2]["price"].iloc[0]
-    total = df_menu[mask1 & mask2]["total"].iloc[0]
+    # total = df_menu[mask1 & mask2]["total"].iloc[0]
+    total = int(price * count)
 
     return price, total
 
@@ -151,7 +152,7 @@ def input_account_id(payment: str):
                 print("輸入格式錯誤，請重新輸入帳號末五碼")
 
 
-def purchase_plan():
+def purchase_plan(df_member: pd.DataFrame):
     """建立購買訂單"""
     purchase_info = {}
 
@@ -206,11 +207,13 @@ def keep_order_or_not():
 
 def build_order():
     """建立輸入的訂單資訊"""
+    df_member = gr.GET_DF_FROM_DB(sheet=MEMBER_SHEET)
+
     order_list = []
 
     while True:
         try:
-            purchase_info = purchase_plan()
+            purchase_info = purchase_plan(df_member=df_member)
             order_list.append(purchase_info)
 
             keep = keep_order_or_not()
