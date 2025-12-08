@@ -15,6 +15,7 @@ def check_cancel(check: str):
 
 
 def input_name():
+    """輸入會員姓名"""
     name = input("請輸入會員姓名：")
     check_cancel(check=name)
 
@@ -22,7 +23,8 @@ def input_name():
 
 
 def input_email():
-    EMAIL_REGEX = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
+    """輸入並驗證email"""
+    EMAIL_REGEX = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
 
     while True:
         email = input("請輸入E-mail：")
@@ -35,6 +37,7 @@ def input_email():
 
 
 def input_birthday():
+    """輸入並驗證生日"""
     while True:
         birthday = input("請輸入會員生日：")
         check_cancel(check=birthday)
@@ -48,6 +51,7 @@ def input_birthday():
 
 
 def input_phone():
+    """輸入並驗證電話號碼"""
     PHONE_REGEX = r"^(09\d{8}|0\d{1,2}\d{7,8})$"
 
     while True:
@@ -61,6 +65,7 @@ def input_phone():
 
 
 def input_new_member_data():
+    """輸入會員資料以建立會員"""
     # 新增會員
     member_data = {}
 
@@ -92,6 +97,7 @@ def input_new_member_data():
 
 
 def keep_add_or_not():
+    """詢問是否繼續新增"""
     while True:
         keep_or_not = input("是否繼續新增會員？[Y/n]").lower()
         if keep_or_not in ["n", ""]:
@@ -103,6 +109,7 @@ def keep_add_or_not():
 
 
 def build_member():
+    """將輸入的資料建立會員"""
     member_list = []
 
     while True:
@@ -120,6 +127,7 @@ def build_member():
 
 
 def check_and_remove_duplicates(df_member: pd.DataFrame, df_temp: pd.DataFrame) -> pd.DataFrame:
+    """確認是否有重複加入的情形"""
     subset = ["會員姓名", "Email", "生日"]
 
     df_check = df_temp.merge(df_member[subset], how="inner", on=subset)

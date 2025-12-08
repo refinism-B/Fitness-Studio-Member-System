@@ -66,7 +66,7 @@ def SAVE_TO_SHEET(df: pd.DataFrame, sheet: str):
             ) as writer:
                 df.to_excel(writer, sheet_name=sheet, index=False)
 
-            print(f"會員資料新增完成！")
+            print(f"資料儲存成功！")
             break
 
         except PermissionError:
