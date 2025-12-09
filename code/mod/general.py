@@ -45,7 +45,13 @@ def GET_DF_FROM_DB(sheet: str):
     root = gr.get_project_root()
     search_result = search_db(root=root, db_name=DATABASE)
     db_path = get_db_path(search_result=search_result)
-    df = pd.read_excel(io=db_path, sheet_name=sheet)
+    df_temp = pd.read_excel(io=db_path, sheet_name=sheet)
+
+    dtype_dict = {}
+    if '電話' in df_temp.columns:
+        dtype_dict['電話'] = str
+
+    df = pd.read_excel(io=db_path, sheet_name=sheet, dtype=dtype_dict)
 
     return df
 
