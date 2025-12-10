@@ -31,14 +31,19 @@ def get_df_main(df_event: pd.DataFrame, df_member: pd.DataFrame) -> pd.DataFrame
 
 
 def D_update_main_data():
-    # 讀入事件紀錄表
-    df_event = gr.GET_DF_FROM_DB(sheet=EVENT_SHEET)
+    try:
+        # 讀入事件紀錄表
+        df_event = gr.GET_DF_FROM_DB(sheet=EVENT_SHEET)
 
-    # 讀入會員表
-    df_member = gr.GET_DF_FROM_DB(sheet=MEMBER_SHEET)
+        # 讀入會員表
+        df_member = gr.GET_DF_FROM_DB(sheet=MEMBER_SHEET)
 
-    # 重新計算main表
-    df_main = get_df_main(df_event=df_event, df_member=df_member)
+        # 重新計算main表
+        df_main = get_df_main(df_event=df_event, df_member=df_member)
 
-    # 存檔
-    gr.SAVE_TO_SHEET(df=df_main, sheet=MAIN_SHEET)
+        # 存檔
+        success, msg = gr.SAVE_TO_SHEET(df=df_main, sheet=MAIN_SHEET)
+        return success, msg
+        
+    except Exception as e:
+        return False, f"更新主表失敗: {str(e)}"

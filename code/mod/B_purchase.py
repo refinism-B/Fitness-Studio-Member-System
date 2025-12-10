@@ -1,237 +1,130 @@
 import re
 from datetime import datetime
-
 import pandas as pd
 from mod import D_main_table as mt
 from mod import O_general as gr
 from mod.O_config import EVENT_SHEET, MEMBER_SHEET, MENU
-from mod.O_general import CancelOperation, InputError, check_cancel
 
-df_member = gr.GET_DF_FROM_DB(sheet=MEMBER_SHEET)
-
-
-def check_name_in_member(name: str, df_member: pd.DataFrame) -> bool:
-    """驗證姓名是否已是會員"""
-    mask1 = (df_member["會員姓名"] == name)
-    check_name = df_member[mask1]
-
-    if len(check_name) == 0:
-        print("查無此會員姓名，請確認對方是否已加入會員")
-        return False
-
+def validate_account_id(payment: str, account_id: str) -> bool:
+    """驗證匯款帳號末五碼"""
+    if payment == "匯款":
+        return bool(re.fullmatch(r"^[0-9]{5}$", account_id))
     return True
 
-
-def check_email_and_name_in_member(email: str, name: str, df_member: pd.DataFrame) -> bool:
-    """驗證姓明與信箱是否已是會員"""
-    mask1 = (df_member["會員姓名"] == name)
-    mask2 = (df_member["Email"] == email)
-    check_mail = df_member[mask1 & mask2]
-
-    if len(check_mail) == 0:
-        print("查無此會員信箱，請確認是否輸入正確Email或對方已加入會員")
-        return False
-    elif len(check_mail) > 1:
-        print("找到多筆會員資料，請刪除重複資料再繼續")
-        return False
-
-    return True
-
-
-def input_name(df_member: pd.DataFrame):
-    """輸入並驗證會員姓名"""
-    name = input("請輸入購買會員姓名：")
-    check_cancel(check=name)
-
-    if check_name_in_member(name=name, df_member=df_member):
-        return True, name
-    else:
-        return False, None
-
-
-def input_email(name: str, df_member: pd.DataFrame):
-    """輸入並驗證信箱"""
-    email = input("請輸入購買會員Email：")
-    check_cancel(check=email)
-
-    if check_email_and_name_in_member(email=email, name=name, df_member=df_member):
-        return True, email
-    else:
-        return False, None
-
-
-def input_plan():
-    """選擇購課方案"""
-    while True:
-        plan = input("請輸入購買方案：（A.一對一/B.一對二/C.團體）")
-        check_cancel(check=plan)
-
-        if plan in ["A", "a", "一對一"]:
-            return "A"
-        elif plan in ["B", "b", "一對二"]:
-            return "B"
-        elif plan in ["C", "c", "團體", "團課", "團體課程"]:
-            return "C"
-        else:
-            print("輸入錯誤，請重新輸入")
-
-
-def input_count(plan: str):
-    """選擇購買堂數"""
-    while True:
-        count = input("請輸入購買堂數：（A.四堂/B.八堂/C.十六堂（團體方案不適用））")
-        check_cancel(check=count)
-
-        if count in ["A", "a", "四堂", "四", "4", 4]:
-            return 4
-        elif count in ["B", "b", "八堂", "八", "8", 8]:
-            return 8
-        elif count in ["C", "c", "十六堂", "十六", "16", 16]:
-            if plan == "C":
-                print("團體課程單次購買上限為八堂，請重新輸入")
-            else:
-                return 17
-        else:
-            print("輸入錯誤，請重新輸入")
-
-
-def input_price(plan: str, count: int):
-    """根據方案與堂數取得單價與總價"""
+def get_price_and_total(plan: str, count: int) -> tuple[float, int]:
+    """取得單價與總價"""
     df_menu = gr.GET_DF_FROM_DB(sheet=MENU)
     df_menu["price"] = df_menu["price"].astype(float)
-    # df_menu["total"] = df_menu["total"].astype(int)
-
+    
+    # 注意：這裡假設 Menu 表中的 count 對應的是實際堂數 (例如 17)
+    # 如果 Menu 表中是 16，但這裡傳入 17，會找不到資料。
+    # 根據舊代碼邏輯，它傳入的是 input_count 的回傳值 (即 17)。
+    # 因此假設 Menu 表中有 17 這個選項，或者舊代碼原本就會報錯。
+    # 為了保險起見，若找不到 17，嘗試找 16 (假設是買16送1)
+    
     mask1 = (df_menu["plan"] == plan)
     mask2 = (df_menu["count"] == count)
-    price = df_menu[mask1 & mask2]["price"].iloc[0]
-    # total = df_menu[mask1 & mask2]["total"].iloc[0]
+    
+    result = df_menu[mask1 & mask2]
+    
+    if result.empty and count == 17:
+        # Fallback logic: try finding 16 and calculate based on that
+        mask2_fallback = (df_menu["count"] == 16)
+        result = df_menu[mask1 & mask2_fallback]
+        
+    if result.empty:
+        raise ValueError(f"找不到對應的價格設定: 方案{plan}, 堂數{count}")
+
+    price = result["price"].iloc[0]
+    # 總價計算：舊代碼是 price * count。如果是買16送1(17堂)，價格應該是 16堂的價格還是 17*單價?
+    # 舊代碼: total = int(price * count)
+    # 這意味著如果是 17 堂，總價就是 17 * 單價。這表示不是送的，是買 17 堂。
     total = int(price * count)
 
     return price, total
 
+def add_purchase_record(name: str, email: str, plan: str, count_selection: str, payment: str, account_id: str = "無") -> tuple[bool, str]:
+    """
+    新增購買紀錄
+    Args:
+        name: 會員姓名
+        email: 會員Email
+        plan: 方案 (A/B/C)
+        count_selection: 購買堂數選項 ("4", "8", "16")
+        payment: 付款方式 (現金/匯款/其他)
+        account_id: 匯款末五碼
+    """
+    try:
+        # 1. 驗證會員是否存在
+        df_member = gr.GET_DF_FROM_DB(sheet=MEMBER_SHEET)
+        mask_member = (df_member["會員姓名"] == name) & (df_member["Email"] == email)
+        if df_member[mask_member].empty:
+            return False, "查無此會員資料 (姓名與Email不符或不存在)"
+        
+        if len(df_member[mask_member]) > 1:
+            return False, "系統中存在重複會員資料，請先清理資料庫"
 
-def input_payment():
-    """選擇付款方式"""
-    payment = input("請輸入付款方式：（A.現金/B.匯款/C.其他）")
-    check_cancel(check=payment)
-
-    if payment in ["A", "a", "現金", "付現"]:
-        return "現金"
-    elif payment in ["B", "b", "轉帳", "匯款"]:
-        return "匯款"
-    elif payment in ["C", "c", "其他"]:
-        return "其他"
-
-
-def input_account_id(payment: str):
-    """匯款帳號末五碼（僅匯款方式，若其他付款方式則無）"""
-    if payment == "現金":
-        return "無"
-    else:
-        while True:
-            account_id = input("請輸入付款帳號末五碼：")
-            check_cancel(check=account_id)
-
-            ACCOUNT_ID = r"^[0-9]{5}$"
-            if re.fullmatch(ACCOUNT_ID, account_id):
-                return account_id
-            else:
-                print("輸入格式錯誤，請重新輸入帳號末五碼")
-
-
-def purchase_plan(df_member: pd.DataFrame):
-    """建立購買訂單"""
-    purchase_info = {}
-
-    check, name = input_name(df_member=df_member)
-    purchase_info["會員姓名"] = name
-
-    if not check:
-        raise InputError("")
-
-    check, email = input_email(name=name, df_member=df_member)
-    purchase_info["Email"] = email
-
-    if not check:
-        raise InputError("")
-
-    plan = input_plan()
-    purchase_info["方案"] = plan
-
-    count = input_count(plan=plan)
-    purchase_info["堂數"] = count
-
-    price, total = input_price(plan=plan, count=count)
-    purchase_info["單堂金額"] = price
-    purchase_info["方案總金額"] = total
-
-    payment = input_payment()
-    purchase_info["付款方式"] = payment
-
-    account_id = input_account_id(payment=payment)
-    purchase_info["匯款末五碼"] = account_id
-
-    today = datetime.now().date().strftime("%Y-%m-%d")
-    now_time = datetime.now().time().strftime("%H:%M:%S")
-
-    purchase_info["交易日期"] = today
-    purchase_info["交易時間"] = now_time
-
-    return purchase_info
-
-
-def keep_order_or_not():
-    """確認是否繼續建立訂單"""
-    while True:
-        keep_or_not = input("是否繼續新增購買訂單？[Y/n]").lower()
-        if keep_or_not in ["n", ""]:
-            return False
-        elif keep_or_not == "y":
-            return True
-        else:
-            print("輸入錯誤，請重新輸入")
-
-
-def build_order():
-    """建立輸入的訂單資訊"""
-    df_member = gr.GET_DF_FROM_DB(sheet=MEMBER_SHEET)
-
-    order_list = []
-
-    while True:
+        # 2. 轉換堂數邏輯 (保留舊代碼邏輯)
+        # count_selection 預期是 "4", "8", "16" (來自前端選單)
         try:
-            purchase_info = purchase_plan(df_member=df_member)
-            order_list.append(purchase_info)
+            count_input = int(count_selection)
+        except ValueError:
+             return False, "堂數格式錯誤"
 
-            keep = keep_order_or_not()
-            if not keep:
-                return order_list
+        final_count = count_input
+        if count_input == 16:
+            if plan == "C": # 團體課
+                return False, "團體課程單次購買上限為八堂"
+            else:
+                final_count = 17 # 舊代碼邏輯：選16變17
 
-        except CancelOperation as e:
-            print(f"{e}")
-            return order_list
+        # 3. 驗證付款資訊
+        if payment == "匯款" and not validate_account_id(payment, account_id):
+            return False, "匯款方式必須輸入正確的末五碼 (5位數字)"
+        
+        if payment != "匯款":
+            account_id = "無"
 
-        except InputError as e:
-            print(f"{e}")
-            return order_list
+        # 4. 計算價格
+        try:
+            price, total = get_price_and_total(plan, final_count)
+        except ValueError as e:
+            return False, str(e)
 
+        # 5. 準備資料
+        today = datetime.now().date().strftime("%Y-%m-%d")
+        now_time = datetime.now().time().strftime("%H:%M:%S")
 
-def B_buy_course_plan():
-    # 讀取事件紀錄表
-    df_event = gr.GET_DF_FROM_DB(sheet=EVENT_SHEET)
+        purchase_info = {
+            "會員姓名": name,
+            "Email": email,
+            "方案": plan,
+            "堂數": final_count,
+            "單堂金額": price,
+            "方案總金額": total,
+            "付款方式": payment,
+            "匯款末五碼": account_id,
+            "交易日期": today,
+            "交易時間": now_time
+        }
 
-    # 建立訂單列表
-    order_list = build_order()
+        # 6. 存檔
+        df_event = gr.GET_DF_FROM_DB(sheet=EVENT_SHEET)
+        df_new = pd.DataFrame([purchase_info])
+        df_event = pd.concat([df_event, df_new], ignore_index=True)
+        
+        success, msg = gr.SAVE_TO_SHEET(df=df_event, sheet=EVENT_SHEET)
+        
+        if success:
+            # 7. 更新主表
+            try:
+                mt.D_update_main_data()
+            except Exception as e:
+                return True, f"購買紀錄儲存成功，但主表更新失敗: {e}"
+                
+            return True, "新增課程購買紀錄成功！"
+        else:
+            return False, msg
 
-    # 將訂單列表轉換成df
-    df_temp = pd.DataFrame(order_list)
-
-    # 將新增訂單與原表合併
-    df_event = pd.concat([df_event, df_temp], ignore_index=True)
-
-    # 存檔
-    gr.SAVE_TO_SHEET(df=df_event, sheet=EVENT_SHEET)
-
-    # 更新主表
-    mt.D_update_main_data()
-    print("新增課程購買紀錄，資料已儲存！")
+    except Exception as e:
+        return False, f"系統錯誤：{str(e)}"

@@ -1,23 +1,11 @@
 from pathlib import Path
-
 import pandas as pd
 from mod.O_config import DATABASE
-
-
-class CancelOperation(Exception):
-    """使用者手動取消操作"""
-    pass
 
 
 class InputError(Exception):
     """查無會員姓名或信箱時的錯誤訊息"""
     pass
-
-
-def check_cancel(check: str):
-    """輸入「*」可強制中止並取消當前操作"""
-    if check == "*":
-        raise CancelOperation("使用者取消")
 
 
 def get_project_root():
@@ -37,9 +25,10 @@ def search_db(root: str, db_name: str) -> str:
 
 def get_db_path(search_result: list[Path]) -> pd.DataFrame:
     if len(search_result) > 1:
-        print(f"錯誤！查詢到{len(search_result)}個資料庫")
+        # 這裡可以改為拋出異常或記錄 log，但在 web app 中 print 看不到
+        pass 
     if len(search_result) == 0:
-        print(f"錯誤！查無資料庫")
+        raise FileNotFoundError(f"錯誤！查無資料庫: {DATABASE}")
 
     db_path = search_result[0]
 
@@ -50,6 +39,11 @@ def GET_DF_FROM_DB(sheet: str):
     root = get_project_root()
     search_result = search_db(root=root, db_name=DATABASE)
     db_path = get_db_path(search_result=search_result)
+    
+    # 檢查檔案是否存在
+    if not db_path.exists():
+         raise FileNotFoundError(f"Database file not found at {db_path}")
+
     df_temp = pd.read_excel(io=db_path, sheet_name=sheet)
 
     dtype_dict = {}
@@ -68,28 +62,20 @@ def SAVE_TO_SHEET(df: pd.DataFrame, sheet: str):
     search_result = search_db(root=root, db_name=DATABASE)
     db_path = get_db_path(search_result=search_result)
 
-    while True:
-        try:
-            # 使用 ExcelWriter 的追加模式
-            with pd.ExcelWriter(
-                db_path,
-                engine="openpyxl",
-                mode="a",  # 追加模式
-                if_sheet_exists="replace"  # 覆蓋該 sheet
-            ) as writer:
-                df.to_excel(writer, sheet_name=sheet, index=False)
+    try:
+        # 使用 ExcelWriter 的追加模式
+        with pd.ExcelWriter(
+            db_path,
+            engine="openpyxl",
+            mode="a",  # 追加模式
+            if_sheet_exists="replace"  # 覆蓋該 sheet
+        ) as writer:
+            df.to_excel(writer, sheet_name=sheet, index=False)
+            
+        return True, "資料儲存成功！"
 
-            # print(f"資料儲存成功！")
-            break
+    except PermissionError:
+        return False, "存檔失敗：檔案可能被開啟，請關閉 Excel 後重試。"
 
-        except PermissionError:
-            warning = input("存檔失敗，請確認檔案是否被開啟或使用。關閉後按enter重試。")
-            check_cancel(check=warning)
-
-        except CancelOperation as e:
-            print(f"{e}")
-            break
-
-        except Exception as e:
-            print(f"發生錯誤：{e}")
-            break
+    except Exception as e:
+        return False, f"發生錯誤：{str(e)}"

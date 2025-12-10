@@ -1,175 +1,102 @@
 import re
 from datetime import datetime
-
 import pandas as pd
 from mod import O_general as gr
 from mod.O_config import MEMBER_SHEET
-from mod.O_general import CancelOperation, check_cancel
 
-
-def input_name():
-    """輸入會員姓名"""
-    name = input("請輸入會員姓名：")
-    check_cancel(check=name)
-
-    return name
-
-
-def input_email():
-    """輸入並驗證email"""
+def validate_email(email: str) -> bool:
+    """驗證email格式"""
     EMAIL_REGEX = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    return bool(re.fullmatch(EMAIL_REGEX, email))
 
-    while True:
-        email = input("請輸入E-mail：")
-        check_cancel(check=email)
-
-        if re.fullmatch(EMAIL_REGEX, email):
-            return email
-        else:
-            print("輸入信箱不正確，請重新輸入")
-
-
-def input_birthday():
-    """輸入並驗證生日"""
-    while True:
-        birthday = input("請輸入會員生日：")
-        check_cancel(check=birthday)
-
-        check = pd.to_datetime(birthday, errors='coerce')
-        if pd.notna(check):
-            birthday_data = check.strftime("%Y-%m-%d")
-            return birthday_data
-        else:
-            print("輸入日期或格式不正確，請重新輸入")
-
-
-def input_phone():
-    """輸入並驗證電話號碼"""
+def validate_phone(phone: str) -> bool:
+    """驗證電話號碼格式"""
     PHONE_REGEX = r"^(09\d{8}|0\d{1,2}\d{7,8})$"
+    return bool(re.fullmatch(PHONE_REGEX, phone))
 
-    while True:
-        phone = input("請輸入會員電話：")
-        check_cancel(check=phone)
+def validate_birthday(birthday: str) -> str | None:
+    """驗證生日格式，若正確回傳 YYYY-MM-DD 字串，否則回傳 None"""
+    # 嘗試解析多種格式，這裡假設傳入的是字串
+    check = pd.to_datetime(birthday, errors='coerce')
+    if pd.notna(check):
+        return check.strftime("%Y-%m-%d")
+    return None
 
-        if re.fullmatch(PHONE_REGEX, phone):
-            return phone
-        else:
-            print("輸入電話格式不正確，請重新輸入")
+def check_duplicates(df_member: pd.DataFrame, name: str, email: str) -> list[str]:
+    """檢查是否有重複會員，回傳重複的會員資訊列表，若無重複回傳空列表"""
+    if df_member.empty:
+        return []
 
+    mask_name = (df_member["會員姓名"] == name)
+    mask_email = (df_member["Email"] == email)
+    
+    # 只要姓名和Email同時符合就算重複 (根據原本邏輯 check_and_remove_duplicates)
+    # 原本邏輯是 merge inner join on name AND email
+    
+    duplicates = df_member[mask_name & mask_email]
+    
+    result = []
+    if not duplicates.empty:
+        for _, row in duplicates.iterrows():
+            result.append(f"{row['會員姓名']} | {row['Email']}")
+            
+    return result
 
-def input_new_member_data():
-    """輸入會員資料以建立會員"""
-    # 新增會員
-    member_data = {}
+def add_new_member(name: str, email: str, birthday: str, phone: str) -> tuple[bool, str]:
+    """
+    新增會員的主要函數
+    Args:
+        name: 會員姓名
+        email: 會員Email
+        birthday: 會員生日 (字串或 datetime object)
+        phone: 會員電話
+    Returns:
+        (success: bool, message: str)
+    """
+    # 1. 基本資料驗證
+    if not name:
+        return False, "會員姓名不能為空"
+        
+    if not validate_email(email):
+        return False, "Email 格式不正確"
+        
+    formatted_birthday = validate_birthday(birthday)
+    if not formatted_birthday:
+        return False, "生日格式不正確"
+        
+    if not validate_phone(phone):
+        return False, "電話格式不正確"
 
-    # 輸入會員資料
-    # 輸入姓名
-    name = input_name()
-    member_data["會員姓名"] = name
-
-    # 輸入信箱
-    email = input_email()
-    member_data["Email"] = email
-
-    # 輸入生日
-    birthday = input_birthday()
-    member_data["生日"] = birthday
-
-    # 輸入電話
-    phone = input_phone()
-    member_data["電話"] = phone
-
-    # 設定加入日期及時間
-    today = datetime.now().date().strftime("%Y-%m-%d")
-    now_time = datetime.now().time().strftime("%H:%M:%S")
-
-    member_data["加入日期"] = today
-    member_data["加入時間"] = now_time
-
-    return member_data
-
-
-def keep_add_or_not():
-    """詢問是否繼續新增"""
-    while True:
-        keep_or_not = input("是否繼續新增會員？[Y/n]").lower()
-        if keep_or_not in ["n", ""]:
-            return False
-        elif keep_or_not == "y":
-            return True
-        else:
-            print("輸入錯誤，請重新輸入")
-
-
-def build_member():
-    """將輸入的資料建立會員"""
-    member_list = []
-
-    while True:
-        try:
-            member_data = input_new_member_data()
-            member_list.append(member_data)
-
-            keep = keep_add_or_not()
-            if not keep:
-                return member_list
-
-        except CancelOperation as e:
-            print(f"{e}")
-            return member_list
-
-
-def check_and_remove_duplicates(df_member: pd.DataFrame, df_temp: pd.DataFrame) -> pd.DataFrame:
-    """確認是否有重複加入的情形"""
-
-    if df_temp.empty:
-        return df_temp
-
-    subset = ["會員姓名", "Email"]
-
-    df_check = df_temp.merge(df_member[subset], how="inner", on=subset)
-
-    if len(df_check) > 0:
-        print("以下會員已存在系統中，將不會新增：")
-        print("=" * 60)
-        for idx, row in df_check.iterrows():
-            print(f"• {row['會員姓名']} | {row['Email']}")
-        print("=" * 60)
-        print(f"已去除 {len(df_check)} 筆重複資料\n")
-
-        # 去除重複資料
-        df_temp_clean = df_temp.drop(df_check.index)
-        return df_temp_clean
-
-    else:
-        return df_temp
-
-
-def A_add_new_member():
     try:
-        # 讀取會員表
+        # 2. 讀取現有會員資料
         df_member = gr.GET_DF_FROM_DB(sheet=MEMBER_SHEET)
+        
+        # 3. 檢查重複
+        duplicates = check_duplicates(df_member, name, email)
+        if duplicates:
+            msg = "以下會員已存在系統中，無法新增：\n" + "\n".join(duplicates)
+            return False, msg
 
-        # 輸入新增會員資料
-        member_list = build_member()
+        # 4. 準備新增資料
+        today = datetime.now().date().strftime("%Y-%m-%d")
+        now_time = datetime.now().time().strftime("%H:%M:%S")
 
-        if not member_list:
-            print("未新增任何會員")
-            return
+        new_member_data = {
+            "會員姓名": name,
+            "Email": email,
+            "生日": formatted_birthday,
+            "電話": phone,
+            "加入日期": today,
+            "加入時間": now_time
+        }
+        
+        df_new = pd.DataFrame([new_member_data])
+        
+        # 5. 合併並存檔
+        df_member = pd.concat([df_member, df_new], ignore_index=True)
+        
+        success, msg = gr.SAVE_TO_SHEET(df=df_member, sheet=MEMBER_SHEET)
+        return success, msg
 
-        # 將新增資料轉成df
-        df_temp = pd.DataFrame(member_list)
-
-        # 檢查是否有已經加入過會員的資料
-        df_temp_clean = check_and_remove_duplicates(
-            df_member=df_member, df_temp=df_temp)
-
-        # 與主表合併
-        df_member = pd.concat([df_member, df_temp_clean], ignore_index=True)
-
-        # 存檔
-        gr.SAVE_TO_SHEET(df=df_member, sheet=MEMBER_SHEET)
-        print("新增會員成功，資料已儲存！")
-
-    except CancelOperation as e:
-        print(f"{e}")
+    except Exception as e:
+        return False, f"系統錯誤：{str(e)}"
