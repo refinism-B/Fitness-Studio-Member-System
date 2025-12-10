@@ -17,10 +17,31 @@ st.set_page_config(page_title="沛力訓練會員系統", layout="wide")
 
 # Sidebar Navigation
 st.sidebar.title("功能選單")
-page = st.sidebar.radio(
-    "請選擇操作：",
-    ["首頁總覽", "新增會員", "購買課程", "會員上課", "手動更新"]
-)
+
+# Initialize session state for page navigation
+if 'page' not in st.session_state:
+    st.session_state.page = "首頁總覽"
+
+def set_page(page_name):
+    st.session_state.page = page_name
+
+# Button style navigation
+if st.sidebar.button("📊 首頁總覽", use_container_width=True):
+    set_page("首頁總覽")
+    
+if st.sidebar.button("👤 新增會員", use_container_width=True):
+    set_page("新增會員")
+    
+if st.sidebar.button("💰 購買課程", use_container_width=True):
+    set_page("購買課程")
+    
+if st.sidebar.button("🏋️ 會員上課", use_container_width=True):
+    set_page("會員上課")
+    
+if st.sidebar.button("🔄 手動更新", use_container_width=True):
+    set_page("手動更新")
+
+page = st.session_state.page
 
 def show_main_table():
     try:
@@ -82,7 +103,8 @@ elif page == "購買課程":
             payment = st.selectbox("付款方式", ["現金", "匯款", "其他"])
         with col2:
             email = st.text_input("Email")
-            count_selection = st.selectbox("購買堂數", ["4", "8", "16"])
+            # Added "1" to the options
+            count_selection = st.selectbox("購買堂數", ["1", "4", "8", "16"])
             account_id = st.text_input("匯款末五碼 (若非匯款請留空)")
             
         submitted = st.form_submit_button("確認送出")

@@ -16,19 +16,18 @@ def get_price_and_total(plan: str, count: int) -> tuple[float, int]:
     df_menu = gr.GET_DF_FROM_DB(sheet=MENU)
     df_menu["price"] = df_menu["price"].astype(float)
     
-    # 注意：這裡假設 Menu 表中的 count 對應的是實際堂數 (例如 17)
-    # 如果 Menu 表中是 16，但這裡傳入 17，會找不到資料。
-    # 根據舊代碼邏輯，它傳入的是 input_count 的回傳值 (即 17)。
-    # 因此假設 Menu 表中有 17 這個選項，或者舊代碼原本就會報錯。
-    # 為了保險起見，若找不到 17，嘗試找 16 (假設是買16送1)
-    
+    # 嘗試直接對應 Plan 與 Count
     mask1 = (df_menu["plan"] == plan)
     mask2 = (df_menu["count"] == count)
-    
     result = df_menu[mask1 & mask2]
     
+    # 特殊處理：Excel 資料中 Plan B (一對二) 的 1 堂課可能被誤植為 Plan A
+    if result.empty and plan == "B" and count == 1:
+        mask_name = (df_menu["name"] == "一對二")
+        result = df_menu[mask_name & mask2]
+
+    # Fallback logic for 17 classes (Buy 16 Get 1 Free)
     if result.empty and count == 17:
-        # Fallback logic: try finding 16 and calculate based on that
         mask2_fallback = (df_menu["count"] == 16)
         result = df_menu[mask1 & mask2_fallback]
         
@@ -36,9 +35,6 @@ def get_price_and_total(plan: str, count: int) -> tuple[float, int]:
         raise ValueError(f"找不到對應的價格設定: 方案{plan}, 堂數{count}")
 
     price = result["price"].iloc[0]
-    # 總價計算：舊代碼是 price * count。如果是買16送1(17堂)，價格應該是 16堂的價格還是 17*單價?
-    # 舊代碼: total = int(price * count)
-    # 這意味著如果是 17 堂，總價就是 17 * 單價。這表示不是送的，是買 17 堂。
     total = int(price * count)
 
     return price, total
@@ -50,7 +46,7 @@ def add_purchase_record(name: str, email: str, plan: str, count_selection: str, 
         name: 會員姓名
         email: 會員Email
         plan: 方案 (A/B/C)
-        count_selection: 購買堂數選項 ("4", "8", "16")
+        count_selection: 購買堂數選項 ("1", "4", "8", "16")
         payment: 付款方式 (現金/匯款/其他)
         account_id: 匯款末五碼
     """
@@ -64,8 +60,8 @@ def add_purchase_record(name: str, email: str, plan: str, count_selection: str, 
         if len(df_member[mask_member]) > 1:
             return False, "系統中存在重複會員資料，請先清理資料庫"
 
-        # 2. 轉換堂數邏輯 (保留舊代碼邏輯)
-        # count_selection 預期是 "4", "8", "16" (來自前端選單)
+        # 2. 轉換堂數邏輯
+        # count_selection 預期是 "1", "4", "8", "16"
         try:
             count_input = int(count_selection)
         except ValueError:
@@ -76,7 +72,7 @@ def add_purchase_record(name: str, email: str, plan: str, count_selection: str, 
             if plan == "C": # 團體課
                 return False, "團體課程單次購買上限為八堂"
             else:
-                final_count = 17 # 舊代碼邏輯：選16變17
+                final_count = 17 # 買16送1
 
         # 3. 驗證付款資訊
         if payment == "匯款" and not validate_account_id(payment, account_id):
