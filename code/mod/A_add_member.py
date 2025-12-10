@@ -1,17 +1,10 @@
-import pandas as pd
-from datetime import datetime
 import re
+from datetime import datetime
 
-
-class CancelOperation(Exception):
-    """使用者手動取消操作"""
-    pass
-
-
-def check_cancel(check: str):
-    """輸入「*」可強制中止並取消當前操作"""
-    if check == "*":
-        raise CancelOperation("使用者取消")
+import pandas as pd
+from mod import O_general as gr
+from mod.O_config import MEMBER_SHEET
+from mod.O_general import CancelOperation, check_cancel
 
 
 def input_name():
@@ -128,15 +121,19 @@ def build_member():
 
 def check_and_remove_duplicates(df_member: pd.DataFrame, df_temp: pd.DataFrame) -> pd.DataFrame:
     """確認是否有重複加入的情形"""
-    subset = ["會員姓名", "Email", "生日"]
+
+    if df_temp.empty:
+        return df_temp
+
+    subset = ["會員姓名", "Email"]
 
     df_check = df_temp.merge(df_member[subset], how="inner", on=subset)
 
     if len(df_check) > 0:
-        print("⚠️  以下會員已存在系統中，將不會新增：")
+        print("以下會員已存在系統中，將不會新增：")
         print("=" * 60)
         for idx, row in df_check.iterrows():
-            print(f"• {row['會員姓名']} | {row['Email']} | {row['生日']}")
+            print(f"• {row['會員姓名']} | {row['Email']}")
         print("=" * 60)
         print(f"已去除 {len(df_check)} 筆重複資料\n")
 
@@ -146,3 +143,33 @@ def check_and_remove_duplicates(df_member: pd.DataFrame, df_temp: pd.DataFrame) 
 
     else:
         return df_temp
+
+
+def A_add_new_member():
+    try:
+        # 讀取會員表
+        df_member = gr.GET_DF_FROM_DB(sheet=MEMBER_SHEET)
+
+        # 輸入新增會員資料
+        member_list = build_member()
+
+        if not member_list:
+            print("未新增任何會員")
+            return
+
+        # 將新增資料轉成df
+        df_temp = pd.DataFrame(member_list)
+
+        # 檢查是否有已經加入過會員的資料
+        df_temp_clean = check_and_remove_duplicates(
+            df_member=df_member, df_temp=df_temp)
+
+        # 與主表合併
+        df_member = pd.concat([df_member, df_temp_clean], ignore_index=True)
+
+        # 存檔
+        gr.SAVE_TO_SHEET(df=df_member, sheet=MEMBER_SHEET)
+        print("新增會員成功，資料已儲存！")
+
+    except CancelOperation as e:
+        print(f"{e}")

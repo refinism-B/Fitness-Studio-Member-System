@@ -1,26 +1,13 @@
-import pandas as pd
-from mod.config import MENU, MEMBER_SHEET
-from mod import general as gr
-from datetime import datetime
 import re
+from datetime import datetime
+
+import pandas as pd
+from mod import D_main_table as mt
+from mod import O_general as gr
+from mod.O_config import EVENT_SHEET, MEMBER_SHEET, MENU
+from mod.O_general import CancelOperation, InputError, check_cancel
 
 df_member = gr.GET_DF_FROM_DB(sheet=MEMBER_SHEET)
-
-
-class CancelOperation(Exception):
-    """使用者手動取消操作"""
-    pass
-
-
-def check_cancel(check: str):
-    """輸入「*」可強制中止並取消當前操作"""
-    if check == "*":
-        raise CancelOperation("使用者取消")
-
-
-class InputError(Exception):
-    """查無會員姓名或信箱時的錯誤訊息"""
-    pass
 
 
 def check_name_in_member(name: str, df_member: pd.DataFrame) -> bool:
@@ -160,13 +147,13 @@ def purchase_plan(df_member: pd.DataFrame):
     purchase_info["會員姓名"] = name
 
     if not check:
-        raise InputError("輸入資料有誤，請確認後重新輸入")
+        raise InputError("")
 
     check, email = input_email(name=name, df_member=df_member)
     purchase_info["Email"] = email
 
     if not check:
-        raise InputError("輸入資料有誤，請確認後重新輸入")
+        raise InputError("")
 
     plan = input_plan()
     purchase_info["方案"] = plan
@@ -227,3 +214,24 @@ def build_order():
         except InputError as e:
             print(f"{e}")
             return order_list
+
+
+def B_buy_course_plan():
+    # 讀取事件紀錄表
+    df_event = gr.GET_DF_FROM_DB(sheet=EVENT_SHEET)
+
+    # 建立訂單列表
+    order_list = build_order()
+
+    # 將訂單列表轉換成df
+    df_temp = pd.DataFrame(order_list)
+
+    # 將新增訂單與原表合併
+    df_event = pd.concat([df_event, df_temp], ignore_index=True)
+
+    # 存檔
+    gr.SAVE_TO_SHEET(df=df_event, sheet=EVENT_SHEET)
+
+    # 更新主表
+    mt.D_update_main_data()
+    print("新增課程購買紀錄，資料已儲存！")

@@ -1,11 +1,16 @@
-import pandas as pd
-from mod.config import DATABASE
-from mod import general as gr
 from pathlib import Path
+
+import pandas as pd
+from mod.O_config import DATABASE
 
 
 class CancelOperation(Exception):
     """使用者手動取消操作"""
+    pass
+
+
+class InputError(Exception):
+    """查無會員姓名或信箱時的錯誤訊息"""
     pass
 
 
@@ -42,7 +47,7 @@ def get_db_path(search_result: list[Path]) -> pd.DataFrame:
 
 
 def GET_DF_FROM_DB(sheet: str):
-    root = gr.get_project_root()
+    root = get_project_root()
     search_result = search_db(root=root, db_name=DATABASE)
     db_path = get_db_path(search_result=search_result)
     df_temp = pd.read_excel(io=db_path, sheet_name=sheet)
@@ -50,6 +55,8 @@ def GET_DF_FROM_DB(sheet: str):
     dtype_dict = {}
     if '電話' in df_temp.columns:
         dtype_dict['電話'] = str
+    if '匯款末五碼' in df_temp.columns:
+        dtype_dict['匯款末五碼'] = str
 
     df = pd.read_excel(io=db_path, sheet_name=sheet, dtype=dtype_dict)
 
@@ -57,7 +64,7 @@ def GET_DF_FROM_DB(sheet: str):
 
 
 def SAVE_TO_SHEET(df: pd.DataFrame, sheet: str):
-    root = gr.get_project_root()
+    root = get_project_root()
     search_result = search_db(root=root, db_name=DATABASE)
     db_path = get_db_path(search_result=search_result)
 
@@ -72,7 +79,7 @@ def SAVE_TO_SHEET(df: pd.DataFrame, sheet: str):
             ) as writer:
                 df.to_excel(writer, sheet_name=sheet, index=False)
 
-            print(f"資料儲存成功！")
+            # print(f"資料儲存成功！")
             break
 
         except PermissionError:

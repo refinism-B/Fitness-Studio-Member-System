@@ -1,23 +1,10 @@
-import pandas as pd
-from mod.config import EVENT_SHEET
-from mod import general as gr
 from datetime import datetime
 
-
-class CancelOperation(Exception):
-    """使用者手動取消操作"""
-    pass
-
-
-def check_cancel(check: str):
-    """輸入「*」可強制中止並取消當前操作"""
-    if check == "*":
-        raise CancelOperation("使用者取消")
-
-
-class InputError(Exception):
-    """查無會員姓名或信箱時的錯誤訊息"""
-    pass
+import pandas as pd
+from mod import D_main_table as mt
+from mod import O_general as gr
+from mod.O_config import EVENT_SHEET
+from mod.O_general import CancelOperation, InputError, check_cancel
 
 
 def check_name_purchase(name: str, df_event: pd.DataFrame) -> bool:
@@ -189,3 +176,24 @@ def build_consume_list():
         except InputError as e:
             print(f"{e}")
             return consume_list
+
+
+def C_consume_course():
+    # 讀取會員表
+    df_event = gr.GET_DF_FROM_DB(sheet=EVENT_SHEET)
+
+    # 輸入消費資料，建立列表
+    consume_list = build_consume_list()
+
+    # 組成暫時df
+    df_temp = pd.DataFrame(consume_list)
+
+    # 與主表合併
+    df_event = pd.concat([df_event, df_temp], ignore_index=True)
+
+    # 存檔
+    gr.SAVE_TO_SHEET(df=df_event, sheet=EVENT_SHEET)
+
+    # 更新主表
+    mt.D_update_main_data()
+    print("新增上課紀錄，資料已儲存！")

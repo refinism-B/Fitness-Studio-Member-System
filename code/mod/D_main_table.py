@@ -1,4 +1,6 @@
 import pandas as pd
+from mod import O_general as gr
+from mod.O_config import EVENT_SHEET, MAIN_SHEET, MEMBER_SHEET
 
 
 def get_sum_table(df_event: pd.DataFrame) -> pd.DataFrame:
@@ -16,7 +18,7 @@ def get_sum_table(df_event: pd.DataFrame) -> pd.DataFrame:
     return df_sum
 
 
-def get_df_main(df_event: pd.DataFrame, de_member: pd.DataFrame) -> pd.DataFrame:
+def get_df_main(df_event: pd.DataFrame, df_member: pd.DataFrame) -> pd.DataFrame:
     df_sum = get_sum_table(df_event=df_event)
 
     df_member = df_member[['會員姓名', 'Email', '生日', '電話']]
@@ -26,3 +28,17 @@ def get_df_main(df_event: pd.DataFrame, de_member: pd.DataFrame) -> pd.DataFrame
     df_main = df_main.sort_values(by="會員姓名", ignore_index=True)
 
     return df_main
+
+
+def D_update_main_data():
+    # 讀入事件紀錄表
+    df_event = gr.GET_DF_FROM_DB(sheet=EVENT_SHEET)
+
+    # 讀入會員表
+    df_member = gr.GET_DF_FROM_DB(sheet=MEMBER_SHEET)
+
+    # 重新計算main表
+    df_main = get_df_main(df_event=df_event, df_member=df_member)
+
+    # 存檔
+    gr.SAVE_TO_SHEET(df=df_main, sheet=MAIN_SHEET)
