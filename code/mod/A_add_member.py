@@ -39,7 +39,7 @@ def validate_birthday(birthday: str) -> str | None:
 #     return coach_id, coach_str
 
 
-def check_duplicates(df_member: pd.DataFrame, name: str, birthday: str) -> list[str]:
+def check_duplicates(df_member: pd.DataFrame, name: str, birthday: str, member_id: str = None) -> list[str]:
     """檢查是否有重複會員，回傳重複的會員資訊列表，若無重複回傳空列表"""
     if df_member.empty:
         return []
@@ -55,7 +55,13 @@ def check_duplicates(df_member: pd.DataFrame, name: str, birthday: str) -> list[
     result = []
     if not duplicates.empty:
         for _, row in duplicates.iterrows():
-            result.append(f"{row['會員姓名']} | {row['Email']}")
+            result.append(f"{row['會員姓名']} | {row['電話']}")
+
+    # 檢查 id 是否重複
+    if member_id:
+        mask_id = (df_member["會員編號"] == member_id)
+        if not df_member[mask_id].empty:
+            result.append(f"會員編號重複 {member_id}")
 
     return result
 
@@ -88,18 +94,22 @@ def add_new_member(member_id: str, name: str, birthday: str, phone: str, coach: 
     try:
         # 2. 讀取現有會員資料
         df_member = gr.GET_DF_FROM_DB(sheet=MEMBER_SHEET)
+        try:
+            coach_id, coach_str = gr.get_coach_id(coach)
+            member_id_formatted = str(coach_str) + str(member_id)
+        except Exception as e:
+            return False, f"取得教練資料失敗: {str(e)}"
 
         # 3. 檢查重複
-        duplicates = check_duplicates(df_member, name, formatted_birthday)
+        duplicates = check_duplicates(df_member, name, formatted_birthday, member_id_formatted)
         if duplicates:
-            msg = "以下會員已存在系統中，無法新增：\n" + "\n".join(duplicates)
+            msg = "無法新增會員資料：\n" + "\n".join(duplicates)
             return False, msg
 
         # 4. 準備新增資料
         today = datetime.now().date().strftime("%Y-%m-%d")
         now_time = datetime.now().time().strftime("%H:%M:%S")
-        coach_id, coach_str = gr.get_coach_id(coach)
-        member_id_formatted = str(coach_str) + str(member_id)
+        # coach_id, coach_str removed from here as it moved up
 
         new_member_data = {
             "會員編號": member_id_formatted,

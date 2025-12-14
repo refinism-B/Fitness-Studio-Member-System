@@ -1,9 +1,3 @@
-from mod.O_config import MAIN_SHEET, MEMBER_SHEET, EVENT_SHEET, COACH, MENU
-from mod import O_general as gr
-from mod import D_main_table
-from mod import C_consume
-from mod import B_purchase
-from mod import A_add_member
 import streamlit as st
 import pandas as pd
 from datetime import datetime
@@ -12,6 +6,13 @@ import os
 
 # Add 'code' directory to sys.path to allow importing 'mod'
 sys.path.append(os.path.join(os.path.dirname(__file__), 'code'))
+
+from mod.O_config import MAIN_SHEET, MEMBER_SHEET, EVENT_SHEET, COACH, MENU
+from mod import O_general as gr
+from mod import D_main_table
+from mod import C_consume
+from mod import B_purchase
+from mod import A_add_member
 
 
 st.set_page_config(page_title="沛力訓練會員系統", layout="wide")
