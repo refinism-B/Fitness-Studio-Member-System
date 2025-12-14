@@ -1,6 +1,6 @@
 from pathlib import Path
 import pandas as pd
-from mod.O_config import DATABASE
+from mod.O_config import DATABASE, COACH, MEMBER_SHEET
 
 
 class InputError(Exception):
@@ -26,7 +26,7 @@ def search_db(root: str, db_name: str) -> str:
 def get_db_path(search_result: list[Path]) -> pd.DataFrame:
     if len(search_result) > 1:
         # 這裡可以改為拋出異常或記錄 log，但在 web app 中 print 看不到
-        pass 
+        pass
     if len(search_result) == 0:
         raise FileNotFoundError(f"錯誤！查無資料庫: {DATABASE}")
 
@@ -39,10 +39,10 @@ def GET_DF_FROM_DB(sheet: str):
     root = get_project_root()
     search_result = search_db(root=root, db_name=DATABASE)
     db_path = get_db_path(search_result=search_result)
-    
+
     # 檢查檔案是否存在
     if not db_path.exists():
-         raise FileNotFoundError(f"Database file not found at {db_path}")
+        raise FileNotFoundError(f"Database file not found at {db_path}")
 
     df_temp = pd.read_excel(io=db_path, sheet_name=sheet)
 
@@ -51,6 +51,8 @@ def GET_DF_FROM_DB(sheet: str):
         dtype_dict['電話'] = str
     if '匯款末五碼' in df_temp.columns:
         dtype_dict['匯款末五碼'] = str
+    if '會員編號' in df_temp.columns:
+        dtype_dict['會員編號'] = str
 
     df = pd.read_excel(io=db_path, sheet_name=sheet, dtype=dtype_dict)
 
@@ -71,7 +73,7 @@ def SAVE_TO_SHEET(df: pd.DataFrame, sheet: str):
             if_sheet_exists="replace"  # 覆蓋該 sheet
         ) as writer:
             df.to_excel(writer, sheet_name=sheet, index=False)
-            
+
         return True, "資料儲存成功！"
 
     except PermissionError:
@@ -79,3 +81,20 @@ def SAVE_TO_SHEET(df: pd.DataFrame, sheet: str):
 
     except Exception as e:
         return False, f"發生錯誤：{str(e)}"
+
+
+def get_coach_id(coach: str) -> str:
+    df_coach = GET_DF_FROM_DB(sheet=COACH)
+    mask = (df_coach["姓名"] == coach)
+    coach_id = df_coach[mask]["教練編號"].iloc[0]
+    coach_str = df_coach[mask]["會員編號"].iloc[0]
+    return coach_id, coach_str
+
+
+def get_member_name(member_id: str) -> str:
+    df_member = GET_DF_FROM_DB(sheet=MEMBER_SHEET)
+    mask = (df_member["會員編號"] == member_id)
+    if df_member[mask].empty:
+        raise InputError("查無此會員資料")
+    member_name = df_member[mask]["會員姓名"].iloc[0]
+    return member_name

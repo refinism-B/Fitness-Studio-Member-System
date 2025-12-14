@@ -5,32 +5,35 @@ from mod import D_main_table as mt
 from mod import O_general as gr
 from mod.O_config import EVENT_SHEET, MEMBER_SHEET, MENU
 
+
 def validate_account_id(payment: str, account_id: str) -> bool:
     """驗證匯款帳號末五碼"""
     if payment == "匯款":
         return bool(re.fullmatch(r"^[0-9]{5}$", account_id))
     return True
 
+
 def get_price_and_total(plan: str, count: int) -> tuple[float, int]:
     """取得單價與總價"""
+
     df_menu = gr.GET_DF_FROM_DB(sheet=MENU)
     df_menu["price"] = df_menu["price"].astype(float)
-    
+
     # 嘗試直接對應 Plan 與 Count
-    mask1 = (df_menu["plan"] == plan)
+    mask1 = (df_menu["name"] == plan)
     mask2 = (df_menu["count"] == count)
     result = df_menu[mask1 & mask2]
-    
+
     # 特殊處理：Excel 資料中 Plan B (一對二) 的 1 堂課可能被誤植為 Plan A
-    if result.empty and plan == "B" and count == 1:
-        mask_name = (df_menu["name"] == "一對二")
-        result = df_menu[mask_name & mask2]
+    # if result.empty and plan == "B" and count == 1:
+    #     mask_name = (df_menu["name"] == "一對二")
+    #     result = df_menu[mask_name & mask2]
 
     # Fallback logic for 17 classes (Buy 16 Get 1 Free)
     if result.empty and count == 17:
         mask2_fallback = (df_menu["count"] == 16)
         result = df_menu[mask1 & mask2_fallback]
-        
+
     if result.empty:
         raise ValueError(f"找不到對應的價格設定: 方案{plan}, 堂數{count}")
 
@@ -39,7 +42,8 @@ def get_price_and_total(plan: str, count: int) -> tuple[float, int]:
 
     return price, total
 
-def add_purchase_record(name: str, email: str, plan: str, count_selection: str, payment: str, account_id: str = "無") -> tuple[bool, str]:
+
+def add_purchase_record(member_id: str, plan: str, count_selection: str, payment: str, coach: str, account_id: str = "無") -> tuple[bool, str]:
     """
     新增購買紀錄
     Args:
@@ -47,37 +51,38 @@ def add_purchase_record(name: str, email: str, plan: str, count_selection: str, 
         email: 會員Email
         plan: 方案 (A/B/C)
         count_selection: 購買堂數選項 ("1", "4", "8", "16")
+        coach: 負責教練
         payment: 付款方式 (現金/匯款/其他)
         account_id: 匯款末五碼
     """
     try:
         # 1. 驗證會員是否存在
         df_member = gr.GET_DF_FROM_DB(sheet=MEMBER_SHEET)
-        mask_member = (df_member["會員姓名"] == name) & (df_member["Email"] == email)
+        mask_member = (df_member["會員編號"] == member_id)
         if df_member[mask_member].empty:
             return False, "查無此會員資料 (姓名與Email不符或不存在)"
-        
+
         if len(df_member[mask_member]) > 1:
-            return False, "系統中存在重複會員資料，請先清理資料庫"
+            return False, "系統中存在重複會員資料，請先清理重複會員資料"
 
         # 2. 轉換堂數邏輯
         # count_selection 預期是 "1", "4", "8", "16"
         try:
             count_input = int(count_selection)
         except ValueError:
-             return False, "堂數格式錯誤"
+            return False, "堂數格式錯誤"
 
         final_count = count_input
         if count_input == 16:
-            if plan == "C": # 團體課
+            if plan == "C":  # 團體課
                 return False, "團體課程單次購買上限為八堂"
             else:
-                final_count = 17 # 買16送1
+                final_count = 17  # 買16送1
 
         # 3. 驗證付款資訊
         if payment == "匯款" and not validate_account_id(payment, account_id):
             return False, "匯款方式必須輸入正確的末五碼 (5位數字)"
-        
+
         if payment != "匯款":
             account_id = "無"
 
@@ -90,14 +95,17 @@ def add_purchase_record(name: str, email: str, plan: str, count_selection: str, 
         # 5. 準備資料
         today = datetime.now().date().strftime("%Y-%m-%d")
         now_time = datetime.now().time().strftime("%H:%M:%S")
+        coach_id, _ = gr.get_coach_id(coach)
+        member_name = gr.get_member_name(member_id)
 
         purchase_info = {
-            "會員姓名": name,
-            "Email": email,
+            "會員編號": member_id,
+            "會員姓名": member_name,
             "方案": plan,
             "堂數": final_count,
             "單堂金額": price,
             "方案總金額": total,
+            "教練": coach_id,
             "付款方式": payment,
             "匯款末五碼": account_id,
             "交易日期": today,
@@ -108,16 +116,16 @@ def add_purchase_record(name: str, email: str, plan: str, count_selection: str, 
         df_event = gr.GET_DF_FROM_DB(sheet=EVENT_SHEET)
         df_new = pd.DataFrame([purchase_info])
         df_event = pd.concat([df_event, df_new], ignore_index=True)
-        
+
         success, msg = gr.SAVE_TO_SHEET(df=df_event, sheet=EVENT_SHEET)
-        
+
         if success:
             # 7. 更新主表
             try:
                 mt.D_update_main_data()
             except Exception as e:
                 return True, f"購買紀錄儲存成功，但主表更新失敗: {e}"
-                
+
             return True, "新增課程購買紀錄成功！"
         else:
             return False, msg
