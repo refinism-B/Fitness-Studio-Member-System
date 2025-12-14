@@ -7,7 +7,7 @@ import os
 # Add 'code' directory to sys.path to allow importing 'mod'
 sys.path.append(os.path.join(os.path.dirname(__file__), 'code'))
 
-from mod.O_config import MAIN_SHEET, MEMBER_SHEET, EVENT_SHEET, COACH, MENU
+from mod.O_config import MAIN_SHEET, MEMBER_SHEET, EVENT_SHEET, COACH, MENU, ADMIN_PASSWORD
 from mod import O_general as gr
 from mod import D_main_table
 from mod import C_consume
@@ -23,6 +23,9 @@ st.sidebar.title("功能選單")
 # Initialize session state for page navigation
 if 'page' not in st.session_state:
     st.session_state.page = "首頁總覽"
+
+if 'is_admin' not in st.session_state:
+    st.session_state.is_admin = False
 
 
 def set_page(page_name):
@@ -49,6 +52,9 @@ page = st.session_state.page
 
 
 def show_main_table():
+    if not st.session_state.is_admin:
+        return
+
     try:
         df = gr.GET_DF_FROM_DB(MAIN_SHEET)
         st.subheader("會員總覽")
@@ -75,7 +81,21 @@ plan_list = get_plan_list(MENU)
 # --- Page: 首頁總覽 ---
 if page == "首頁總覽":
     st.title("📊 首頁總覽")
-    show_main_table()
+
+    if not st.session_state.is_admin:
+        password = st.text_input("請輸入管理員密碼以查看資料", type="password")
+        if password:
+            if password == ADMIN_PASSWORD:
+                st.session_state.is_admin = True
+                st.rerun()
+            else:
+                st.error("輸入錯誤，請重新輸入")
+    
+    if st.session_state.is_admin:
+        if st.button("登出管理員"):
+            st.session_state.is_admin = False
+            st.rerun()
+        show_main_table()
 
 # --- Page: 新增會員 ---
 elif page == "新增會員":
@@ -116,11 +136,14 @@ elif page == "新增會員":
 
     st.divider()
     st.subheader("會員列表")
-    try:
-        df_member = gr.GET_DF_FROM_DB(MEMBER_SHEET)
-        st.dataframe(df_member, use_container_width=True)
-    except Exception as e:
-        st.error(f"讀取會員表失敗: {e}")
+    if st.session_state.is_admin:
+        try:
+            df_member = gr.GET_DF_FROM_DB(MEMBER_SHEET)
+            st.dataframe(df_member, use_container_width=True)
+        except Exception as e:
+            st.error(f"讀取會員表失敗: {e}")
+    else:
+        st.info("請先至首頁驗證管理員身份以查看會員列表")
 
 # --- Page: 購買課程 ---
 elif page == "購買課程":
