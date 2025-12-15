@@ -15,7 +15,10 @@ def get_project_root():
     return root_path
 
 
-def search_db(root: str, db_name: str) -> str:
+from functools import lru_cache
+
+@lru_cache(maxsize=1)
+def search_db(root: str, db_name: str) -> list[Path]:
     root = Path(root)
     search = f"**/{db_name}"
     result = list(root.rglob(search))
@@ -44,14 +47,15 @@ def GET_DF_FROM_DB(sheet: str):
     if not db_path.exists():
         raise FileNotFoundError(f"Database file not found at {db_path}")
 
-    df_temp = pd.read_excel(io=db_path, sheet_name=sheet)
+    # 優化：僅讀取 Header 以確認欄位，大幅減少 I/O
+    headers = pd.read_excel(io=db_path, sheet_name=sheet, nrows=0).columns
 
     dtype_dict = {}
-    if '電話' in df_temp.columns:
+    if '電話' in headers:
         dtype_dict['電話'] = str
-    if '匯款末五碼' in df_temp.columns:
+    if '匯款末五碼' in headers:
         dtype_dict['匯款末五碼'] = str
-    if '會員編號' in df_temp.columns:
+    if '會員編號' in headers:
         dtype_dict['會員編號'] = str
 
     df = pd.read_excel(io=db_path, sheet_name=sheet, dtype=dtype_dict)

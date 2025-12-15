@@ -16,6 +16,12 @@ import pandas as pd
 from datetime import datetime
 
 
+@st.cache_data
+def load_data(sheet: str):
+    return gr.GET_DF_FROM_DB(sheet)
+
+
+
 st.set_page_config(page_title="沛力訓練會員系統", layout="wide")
 
 # Sidebar Navigation
@@ -57,7 +63,7 @@ def show_main_table(show_total=False):
         return
 
     try:
-        df = gr.GET_DF_FROM_DB(MAIN_SHEET)
+        df = load_data(MAIN_SHEET)
         
         if show_total and "剩餘預收款項" in df.columns:
             total_remaining = df["剩餘預收款項"].sum()
@@ -70,7 +76,7 @@ def show_main_table(show_total=False):
 
 
 def get_coach_list(coach_sheet: str = COACH) -> list[str]:
-    df_coach = gr.GET_DF_FROM_DB(sheet=coach_sheet)
+    df_coach = load_data(sheet=coach_sheet)
     return df_coach["姓名"].tolist()
 
 
@@ -78,7 +84,7 @@ coach_list = get_coach_list(COACH)
 
 
 def get_plan_list(menu_sheet: str = MENU) -> list[str]:
-    df_menu = gr.GET_DF_FROM_DB(sheet=menu_sheet)
+    df_menu = load_data(sheet=menu_sheet)
     return df_menu["name"].unique().tolist()
 
 
@@ -102,7 +108,7 @@ def get_execute_func(action_type):
 
 def get_member_selection_list() -> list[str]:
     try:
-        df_member = gr.GET_DF_FROM_DB(MEMBER_SHEET)
+        df_member = load_data(MEMBER_SHEET)
         # Format: "會員編號 - 會員姓名"
         return [f"{row['會員編號']} - {row['會員姓名']}" for _, row in df_member.iterrows()]
     except Exception:
@@ -128,7 +134,7 @@ def run_confirmation_dialog():
             # Display common info from first record
             first = data['batch_list'][0]
             st.write(f"**方案**: {first['方案']}")
-            st.write(f"**教練**: {gr.GET_DF_FROM_DB(COACH)[gr.GET_DF_FROM_DB(COACH)['教練編號'] == first['教練']]['姓名'].iloc[0] if '教練' in first else '未知'}")
+            st.write(f"**教練**: {load_data(COACH)[load_data(COACH)['教練編號'] == first['教練']]['姓名'].iloc[0] if '教練' in first else '未知'}")
             
             # Create a simple DataFrame for display
             display_data = []
@@ -239,7 +245,7 @@ elif page == "新增會員":
     st.subheader("會員列表")
     if st.session_state.is_admin:
         try:
-            df_member = gr.GET_DF_FROM_DB(MEMBER_SHEET)
+            df_member = load_data(MEMBER_SHEET)
             st.dataframe(df_member, use_container_width=True)
         except Exception as e:
             st.error(f"讀取會員表失敗: {e}")
