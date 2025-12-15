@@ -1,18 +1,19 @@
-import streamlit as st
-import pandas as pd
-from datetime import datetime
 import sys
 import os
 
 # Add 'code' directory to sys.path to allow importing 'mod'
-sys.path.append(os.path.join(os.path.dirname(__file__), 'code'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'code'))
 
-from mod.O_config import MAIN_SHEET, MEMBER_SHEET, EVENT_SHEET, COACH, MENU, ADMIN_PASSWORD
-from mod import O_general as gr
-from mod import D_main_table
-from mod import C_consume
-from mod import B_purchase
 from mod import A_add_member
+from mod import B_purchase
+from mod import C_consume
+from mod import D_main_table
+from mod import E_customized_course
+from mod import O_general as gr
+from mod.O_config import MAIN_SHEET, MEMBER_SHEET, EVENT_SHEET, COACH, MENU, ADMIN_PASSWORD
+import streamlit as st
+import pandas as pd
+from datetime import datetime
 
 
 st.set_page_config(page_title="沛力訓練會員系統", layout="wide")
@@ -77,6 +78,8 @@ def get_plan_list(menu_sheet: str = MENU) -> list[str]:
 
 
 plan_list = get_plan_list(MENU)
+consume_list = list(plan_list)
+consume_list.append("特殊課程")
 
 # --- Page: 首頁總覽 ---
 if page == "首頁總覽":
@@ -90,7 +93,7 @@ if page == "首頁總覽":
                 st.rerun()
             else:
                 st.error("輸入錯誤，請重新輸入")
-    
+
     if st.session_state.is_admin:
         if st.button("登出管理員"):
             st.session_state.is_admin = False
@@ -149,37 +152,73 @@ elif page == "新增會員":
 elif page == "購買課程":
     st.title("💰 購買課程")
 
-    with st.form("purchase_form"):
-        col1, col2 = st.columns(2)
-        with col1:
-            member_id = st.text_input("會員編號", placeholder='請輸入完整會員編號')
-            plan = st.selectbox(
-                "購買方案", plan_list, format_func=lambda x: f"{x}", index=None, placeholder='請選擇購買方案')
-            payment = st.selectbox(
-                "付款方式", ["現金", "匯款"], index=None, placeholder='請選擇付款方式')
-        with col2:
-            coach = st.selectbox(
-                "教練", coach_list,
-                format_func=lambda x: f"{x}",
-                index=None,
-                placeholder='請選擇教練')
-            count_selection = st.selectbox(
-                "購買堂數", ["1", "4", "8", "16"], index=None, placeholder='請選擇購買堂數')
-            account_id = st.text_input(
-                "匯款末五碼", placeholder='輸入匯款帳號末五碼，若是現金付款請留空')
+    purchase_type = st.radio("課程類型", ["一般課程", "特殊課程"], horizontal=True)
 
-        submitted = st.form_submit_button("確認送出")
+    if purchase_type == "一般課程":
+        with st.form("purchase_form"):
+            col1, col2 = st.columns(2)
+            with col1:
+                member_id = st.text_input("會員編號", placeholder='請輸入完整會員編號')
+                plan = st.selectbox(
+                    "購買方案", plan_list, format_func=lambda x: f"{x}", index=None, placeholder='請選擇購買方案')
+                payment = st.selectbox(
+                    "付款方式", ["現金", "匯款"], index=None, placeholder='請選擇付款方式')
+            with col2:
+                coach = st.selectbox(
+                    "教練", coach_list,
+                    format_func=lambda x: f"{x}",
+                    index=None,
+                    placeholder='請選擇教練')
+                count_selection = st.selectbox(
+                    "購買堂數", ["1", "4", "8", "16"], index=None, placeholder='請選擇購買堂數')
+                account_id = st.text_input(
+                    "匯款末五碼", placeholder='輸入匯款帳號末五碼，若是現金付款請留空')
 
-        if submitted:
-            success, msg = B_purchase.add_purchase_record(
-                member_id, plan, count_selection, payment, coach, account_id
-            )
+            submitted = st.form_submit_button("確認送出")
 
-            if success:
-                st.success(msg)
-                st.cache_data.clear()
-            else:
-                st.error(msg)
+            if submitted:
+                success, msg = B_purchase.add_purchase_record(
+                    member_id, plan, count_selection, payment, coach, account_id
+                )
+
+                if success:
+                    st.success(msg)
+                    st.cache_data.clear()
+                else:
+                    st.error(msg)
+    
+    else:  # 特殊課程
+        with st.form("customized_purchase_form"):
+            col1, col2 = st.columns(2)
+            with col1:
+                member_id = st.text_input("會員編號", placeholder='請輸入完整會員編號')
+                # 特殊課程不需選擇方案，強制固定
+                count_selection = st.number_input("購買堂數", step=1, placeholder="請輸入購買堂數")
+                payment = st.selectbox(
+                    "付款方式", ["現金", "匯款"], index=None, placeholder='請選擇付款方式')
+
+            with col2:
+                coach = st.selectbox(
+                    "教練", coach_list,
+                    format_func=lambda x: f"{x}",
+                    index=None,
+                    placeholder='請選擇教練')
+                price = st.number_input("單堂金額", step=50, placeholder="請輸入單堂金額")
+                account_id = st.text_input(
+                    "匯款末五碼", placeholder='輸入匯款帳號末五碼，若是現金付款請留空')
+
+            submitted = st.form_submit_button("確認送出")
+
+            if submitted:
+                success, msg = E_customized_course.add_customized_course_record(
+                    member_id, count_selection, price, payment, coach, account_id
+                )
+
+                if success:
+                    st.success(msg)
+                    st.cache_data.clear()
+                else:
+                    st.error(msg)
 
     st.divider()
     show_main_table()
@@ -200,7 +239,7 @@ elif page == "會員上課":
 
         with col2:
             plan = st.selectbox(
-                "上課方案", plan_list, format_func=lambda x: f"{x}", index=None, placeholder='請選擇上課方案')
+                "上課方案", consume_list, format_func=lambda x: f"{x}", index=None, placeholder='請選擇上課方案')
 
         submitted = st.form_submit_button("確認送出")
 

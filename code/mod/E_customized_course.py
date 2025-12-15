@@ -13,38 +13,13 @@ def validate_account_id(payment: str, account_id: str) -> bool:
     return True
 
 
-def get_price_and_total(plan: str, count: int) -> tuple[float, int]:
-    """取得單價與總價"""
-
-    df_menu = gr.GET_DF_FROM_DB(sheet=MENU)
-    df_menu["price"] = df_menu["price"].astype(float)
-
-    # 嘗試直接對應 Plan 與 Count
-    mask1 = (df_menu["name"] == plan)
-    mask2 = (df_menu["count"] == count)
-    result = df_menu[mask1 & mask2]
-
-    # Fallback logic for 17 classes (Buy 16 Get 1 Free)
-    if result.empty and count == 17:
-        mask2_fallback = (df_menu["count"] == 16)
-        result = df_menu[mask1 & mask2_fallback]
-
-    if result.empty:
-        raise ValueError(f"找不到對應的價格設定: 方案{plan}, 堂數{count}")
-
-    price = result["price"].iloc[0]
-    total = int(price * count)
-
-    return price, total
-
-
-def add_purchase_record(member_id: str, plan: str, count_selection: str, payment: str, coach: str, account_id: str = "無") -> tuple[bool, str]:
+def add_customized_course_record(member_id: str, count_selection: int, price: int, payment: str, coach: str, account_id: str = "無") -> tuple[bool, str]:
     """
     新增購買紀錄
     Args:
         member_id: 會員編號
-        plan: 方案 (A/B/C)
-        count_selection: 購買堂數選項 ("1", "4", "8", "16")
+        count_selection: 購買堂數（自行輸入整數）
+        price: 單堂金額（自行輸入整數，自動計算方案總額）
         payment: 付款方式 (現金/匯款/其他)
         coach: 負責教練
         account_id: 匯款末五碼
@@ -59,19 +34,22 @@ def add_purchase_record(member_id: str, plan: str, count_selection: str, payment
         if len(df_member[mask_member]) > 1:
             return False, "系統中存在重複會員資料，請先清理重複會員資料"
 
-        # 2. 轉換堂數邏輯
-        # count_selection 預期是 "1", "4", "8", "16"
+        # 2. 計算堂數與金額
         try:
             count_input = int(count_selection)
+            if count_input <= 0:
+                raise ValueError
         except ValueError:
-            return False, "堂數格式錯誤"
+            return False, "堂數必須為正整數"
 
-        final_count = count_input
-        if count_input == 16:
-            if plan == "C":  # 團體課
-                return False, "團體課程單次購買上限為八堂"
-            else:
-                final_count = 17  # 買16送1
+        try:
+            price_input = int(price)
+            if price_input <= 0:
+                raise ValueError
+        except ValueError:
+            return False, "單堂金額必須為正整數"
+
+        total = int(count_input * price_input)
 
         # 3. 驗證付款資訊
         if payment == "匯款" and not validate_account_id(payment, account_id):
@@ -79,12 +57,6 @@ def add_purchase_record(member_id: str, plan: str, count_selection: str, payment
 
         if payment != "匯款":
             account_id = "無"
-
-        # 4. 計算價格
-        try:
-            price, total = get_price_and_total(plan, final_count)
-        except ValueError as e:
-            return False, str(e)
 
         # 5. 準備資料
         today = datetime.now().date().strftime("%Y-%m-%d")
@@ -95,9 +67,9 @@ def add_purchase_record(member_id: str, plan: str, count_selection: str, payment
         purchase_info = {
             "會員編號": member_id,
             "會員姓名": member_name,
-            "方案": plan,
-            "堂數": final_count,
-            "單堂金額": price,
+            "方案": "特殊課程",
+            "堂數": count_input,
+            "單堂金額": price_input,
             "方案總金額": total,
             "教練": coach_id,
             "付款方式": payment,
