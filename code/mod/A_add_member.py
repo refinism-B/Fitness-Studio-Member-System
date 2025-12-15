@@ -66,30 +66,25 @@ def check_duplicates(df_member: pd.DataFrame, name: str, birthday: str, member_i
     return result
 
 
-def add_new_member(member_id: str, name: str, birthday: str, phone: str, coach: str) -> tuple[bool, str]:
+def validate_add_member(member_id: str, name: str, birthday: str, phone: str, coach: str) -> tuple[bool, str, dict]:
     """
-    新增會員的主要函數
-    Args:
-        name: 會員姓名
-        email: 會員Email
-        birthday: 會員生日 (字串或 datetime object)
-        phone: 會員電話
+    驗證新增會員資料
     Returns:
-        (success: bool, message: str)
+        (success: bool, message: str, data_dict: dict)
     """
     # 1. 基本資料驗證
     if not validate_member_id(member_id):
-        return False, "會員編號格式不正確"
+        return False, "會員編號格式不正確", {}
 
     if not name:
-        return False, "會員姓名不能為空"
+        return False, "會員姓名不能為空", {}
 
     formatted_birthday = validate_birthday(birthday)
     if not formatted_birthday:
-        return False, "生日格式不正確"
+        return False, "生日格式不正確", {}
 
     if not validate_phone(phone):
-        return False, "電話格式不正確"
+        return False, "電話格式不正確", {}
 
     try:
         # 2. 讀取現有會員資料
@@ -98,18 +93,17 @@ def add_new_member(member_id: str, name: str, birthday: str, phone: str, coach: 
             coach_id, coach_str = gr.get_coach_id(coach)
             member_id_formatted = str(coach_str) + str(member_id)
         except Exception as e:
-            return False, f"取得教練資料失敗: {str(e)}"
+            return False, f"取得教練資料失敗: {str(e)}", {}
 
         # 3. 檢查重複
         duplicates = check_duplicates(df_member, name, formatted_birthday, member_id_formatted)
         if duplicates:
             msg = "無法新增會員資料：\n" + "\n".join(duplicates)
-            return False, msg
+            return False, msg, {}
 
         # 4. 準備新增資料
         today = datetime.now().date().strftime("%Y-%m-%d")
         now_time = datetime.now().time().strftime("%H:%M:%S")
-        # coach_id, coach_str removed from here as it moved up
 
         new_member_data = {
             "會員編號": member_id_formatted,
@@ -120,14 +114,24 @@ def add_new_member(member_id: str, name: str, birthday: str, phone: str, coach: 
             "加入日期": today,
             "加入時間": now_time
         }
-
-        df_new = pd.DataFrame([new_member_data])
-
-        # 5. 合併並存檔
-        df_member = pd.concat([df_member, df_new], ignore_index=True)
-
-        success, msg = gr.SAVE_TO_SHEET(df=df_member, sheet=MEMBER_SHEET)
-        return success, msg
+        
+        return True, "驗證成功", new_member_data
 
     except Exception as e:
-        return False, f"系統錯誤：{str(e)}"
+        return False, f"系統錯誤：{str(e)}", {}
+
+
+def execute_add_member(data: dict) -> tuple[bool, str]:
+    """
+    執行新增會員資料
+    """
+    try:
+        df_member = gr.GET_DF_FROM_DB(sheet=MEMBER_SHEET)
+        df_new = pd.DataFrame([data])
+        
+        # 5. 合併並存檔
+        df_member = pd.concat([df_member, df_new], ignore_index=True)
+        success, msg = gr.SAVE_TO_SHEET(df=df_member, sheet=MEMBER_SHEET)
+        return success, msg
+    except Exception as e:
+        return False, f"儲存失敗：{str(e)}"

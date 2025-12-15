@@ -17,24 +17,22 @@ def get_member_stock(member_id: str, plan: str) -> pd.DataFrame:
     return df_sum[mask1 & mask2]
 
 
-def add_consume_record(member_id: str, plan: str, coach: str) -> tuple[bool, str]:
+def validate_consume_record(member_id: str, plan: str, coach: str) -> tuple[bool, str, dict]:
     """
-    新增上課(扣堂)紀錄
-    Args:
-        name: 會員姓名
-        email: 會員Email
-        plan: 方案 (A/B/C)
+    驗證上課(扣堂)紀錄
+    Returns:
+        (success: bool, message: str, data_dict: dict)
     """
     try:
         # 1. 檢查是否有庫存
         df_result = get_member_stock(member_id, plan)
 
         if df_result.empty:
-            return False, "查無此會員該方案的購買紀錄或庫存"
+            return False, "查無此會員該方案的購買紀錄或庫存", {}
 
         remaining_count = df_result["剩餘堂數"].iloc[0]
         if remaining_count <= 0:
-            return False, f"該會員方案已無剩餘堂數 (剩餘: {remaining_count})"
+            return False, f"該會員方案已無剩餘堂數 (剩餘: {remaining_count})", {}
 
         # 2. 準備扣堂資料
         avg_price = float(df_result["平均單堂金額"].iloc[0])
@@ -56,10 +54,21 @@ def add_consume_record(member_id: str, plan: str, coach: str) -> tuple[bool, str
             "交易日期": today,
             "交易時間": now_time
         }
+        
+        return True, "驗證成功", consume_info
 
+    except Exception as e:
+        return False, f"系統錯誤：{str(e)}", {}
+
+
+def execute_consume_record(data: dict) -> tuple[bool, str]:
+    """
+    執行新增上課(扣堂)紀錄
+    """
+    try:
         # 3. 存檔
         df_event = gr.GET_DF_FROM_DB(sheet=EVENT_SHEET)
-        df_new = pd.DataFrame([consume_info])
+        df_new = pd.DataFrame([data])
         df_event = pd.concat([df_event, df_new], ignore_index=True)
 
         success, msg = gr.SAVE_TO_SHEET(df=df_event, sheet=EVENT_SHEET)

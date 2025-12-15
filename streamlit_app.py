@@ -81,6 +81,64 @@ plan_list = get_plan_list(MENU)
 consume_list = list(plan_list)
 consume_list.append("特殊課程")
 
+# --- Helper Functions for Confirmation ---
+
+def get_execute_func(action_type):
+    if action_type == "add_member":
+        return A_add_member.execute_add_member
+    elif action_type == "purchase":
+        return B_purchase.execute_purchase_record
+    elif action_type == "customized_purchase":
+        return E_customized_course.execute_customized_course_record
+    elif action_type == "consume":
+        return C_consume.execute_consume_record
+    return None
+
+@st.dialog("資料確認")
+def run_confirmation_dialog():
+    if "confirm_data" not in st.session_state or "confirm_action" not in st.session_state:
+        st.rerun()
+        return
+
+    data = st.session_state.confirm_data
+    action = st.session_state.confirm_action
+
+    st.write("請再次確認以下資料：")
+    
+    # Display data in a nice format
+    for key, value in data.items():
+        st.write(f"**{key}**: {value}")
+
+    col1, col2 = st.columns(2)
+    
+    if col1.button("確認送出", type="primary", use_container_width=True):
+        func = get_execute_func(action)
+        if func:
+            success, msg = func(data)
+            if success:
+                st.success(msg)
+                # Clear confirmation state
+                del st.session_state.confirm_data
+                del st.session_state.confirm_action
+                # Clear cache and rerun
+                st.cache_data.clear()
+                st.rerun()
+            else:
+                st.error(msg)
+        else:
+            st.error("系統錯誤：找不到對應的執行函數")
+
+    if col2.button("取消", use_container_width=True):
+        del st.session_state.confirm_data
+        del st.session_state.confirm_action
+        st.rerun()
+
+
+# Manage Dialog State
+if "confirm_data" in st.session_state and st.session_state.confirm_data is not None:
+    run_confirmation_dialog()
+
+
 # --- Page: 首頁總覽 ---
 if page == "首頁總覽":
     st.title("📊 首頁總覽")
@@ -127,13 +185,15 @@ elif page == "新增會員":
         if submitted:
             # Convert date to string
             birthday_str = birthday.strftime("%Y-%m-%d")
-            success, msg = A_add_member.add_new_member(
+            
+            # Validation
+            success, msg, data = A_add_member.validate_add_member(
                 member_id, name, birthday_str, phone, coach)
 
             if success:
-                st.success(msg)
-                # Refresh data
-                st.cache_data.clear()
+                st.session_state.confirm_data = data
+                st.session_state.confirm_action = "add_member"
+                st.rerun()
             else:
                 st.error(msg)
 
@@ -177,13 +237,14 @@ elif page == "購買課程":
             submitted = st.form_submit_button("確認送出")
 
             if submitted:
-                success, msg = B_purchase.add_purchase_record(
+                success, msg, data = B_purchase.validate_purchase_record(
                     member_id, plan, count_selection, payment, coach, account_id
                 )
 
                 if success:
-                    st.success(msg)
-                    st.cache_data.clear()
+                    st.session_state.confirm_data = data
+                    st.session_state.confirm_action = "purchase"
+                    st.rerun()
                 else:
                     st.error(msg)
     
@@ -210,13 +271,14 @@ elif page == "購買課程":
             submitted = st.form_submit_button("確認送出")
 
             if submitted:
-                success, msg = E_customized_course.add_customized_course_record(
+                success, msg, data = E_customized_course.validate_customized_course_record(
                     member_id, count_selection, price, payment, coach, account_id
                 )
 
                 if success:
-                    st.success(msg)
-                    st.cache_data.clear()
+                    st.session_state.confirm_data = data
+                    st.session_state.confirm_action = "customized_purchase"
+                    st.rerun()
                 else:
                     st.error(msg)
 
@@ -244,11 +306,12 @@ elif page == "會員上課":
         submitted = st.form_submit_button("確認送出")
 
         if submitted:
-            success, msg = C_consume.add_consume_record(member_id, plan, coach)
+            success, msg, data = C_consume.validate_consume_record(member_id, plan, coach)
 
             if success:
-                st.success(msg)
-                st.cache_data.clear()
+                st.session_state.confirm_data = data
+                st.session_state.confirm_action = "consume"
+                st.rerun()
             else:
                 st.error(msg)
 
