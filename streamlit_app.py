@@ -23,7 +23,7 @@ st.sidebar.title("功能選單")
 
 # Initialize session state for page navigation
 if 'page' not in st.session_state:
-    st.session_state.page = "首頁總覽"
+    st.session_state.page = "首頁"
 
 if 'is_admin' not in st.session_state:
     st.session_state.is_admin = False
@@ -34,8 +34,8 @@ def set_page(page_name):
 
 
 # Button style navigation
-if st.sidebar.button("📊 首頁總覽", use_container_width=True):
-    set_page("首頁總覽")
+if st.sidebar.button("📊 首頁", use_container_width=True):
+    set_page("首頁")
 
 if st.sidebar.button("👤 新增會員", use_container_width=True):
     set_page("新增會員")
@@ -52,12 +52,17 @@ if st.sidebar.button("🔄 手動更新", use_container_width=True):
 page = st.session_state.page
 
 
-def show_main_table():
+def show_main_table(show_total=False):
     if not st.session_state.is_admin:
         return
 
     try:
         df = gr.GET_DF_FROM_DB(MAIN_SHEET)
+        
+        if show_total and "剩餘預收款項" in df.columns:
+            total_remaining = df["剩餘預收款項"].sum()
+            st.subheader(f"剩餘預收款項總額：{int(total_remaining):,} 元")
+
         st.subheader("會員總覽")
         st.dataframe(df, use_container_width=True)
     except Exception as e:
@@ -170,8 +175,11 @@ if "confirm_data" in st.session_state and st.session_state.confirm_data is not N
 
 
 # --- Page: 首頁總覽 ---
-if page == "首頁總覽":
-    st.title("📊 首頁總覽")
+if page == "首頁":
+    st.title("📊 首頁")
+    st.subheader("歡迎使用沛力訓練會員系統！\n請選擇左側功能或下方登入管理員")
+
+    st.divider()
 
     if not st.session_state.is_admin:
         password = st.text_input("請輸入管理員密碼以查看資料", type="password")
@@ -186,7 +194,7 @@ if page == "首頁總覽":
         if st.button("登出管理員"):
             st.session_state.is_admin = False
             st.rerun()
-        show_main_table()
+        show_main_table(show_total=True)
 
 # --- Page: 新增會員 ---
 elif page == "新增會員":
