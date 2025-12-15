@@ -17,45 +17,68 @@ def get_member_stock(member_id: str, plan: str) -> pd.DataFrame:
     return df_sum[mask1 & mask2]
 
 
-def validate_consume_record(member_id: str, plan: str, coach: str) -> tuple[bool, str, dict]:
+def validate_consume_record(member_id_list: list[str], plan: str, coach: str) -> tuple[bool, str, dict]:
     """
-    驗證上課(扣堂)紀錄
+    驗證上課(扣堂)紀錄 - 支援批次處理
+    Args:
+        member_id_list: 會員編號列表
+        plan: 方案
+        coach: 教練
     Returns:
         (success: bool, message: str, data_dict: dict)
     """
     try:
-        # 1. 檢查是否有庫存
-        df_result = get_member_stock(member_id, plan)
+        if not member_id_list:
+            return False, "請至少選擇一位會員", {}
 
-        if df_result.empty:
-            return False, "查無此會員該方案的購買紀錄或庫存", {}
+        batch_data = []
+        error_messages = []
 
-        remaining_count = df_result["剩餘堂數"].iloc[0]
-        if remaining_count <= 0:
-            return False, f"該會員方案已無剩餘堂數 (剩餘: {remaining_count})", {}
-
-        # 2. 準備扣堂資料
-        avg_price = float(df_result["平均單堂金額"].iloc[0])
+        # 取得教練ID一次即可
+        coach_id, _ = gr.get_coach_id(coach)
         today = datetime.now().date().strftime("%Y-%m-%d")
         now_time = datetime.now().time().strftime("%H:%M:%S")
-        coach_id, _ = gr.get_coach_id(coach)
-        member_name = gr.get_member_name(member_id)
 
-        consume_info = {
-            "會員編號": member_id,
-            "會員姓名": member_name,
-            "方案": plan,
-            "堂數": -1,
-            "單堂金額": avg_price,
-            "方案總金額": (avg_price * -1),
-            "教練": coach_id,
-            "付款方式": "上課",
-            "匯款末五碼": "無",
-            "交易日期": today,
-            "交易時間": now_time
-        }
-        
-        return True, "驗證成功", consume_info
+        for member_id in member_id_list:
+            # 1. 檢查是否有庫存
+            df_result = get_member_stock(member_id, plan)
+            try:
+                member_name = gr.get_member_name(member_id)
+            except Exception:
+                member_name = "未知會員"
+
+            if df_result.empty:
+                error_messages.append(f"{member_id} ({member_name}): 查無該方案購買紀錄")
+                continue
+
+            remaining_count = df_result["剩餘堂數"].iloc[0]
+            if remaining_count <= 0:
+                error_messages.append(f"{member_id} ({member_name}): 剩餘堂數不足 ({remaining_count})")
+                continue
+
+            # 2. 準備扣堂資料
+            avg_price = float(df_result["平均單堂金額"].iloc[0])
+            
+            consume_info = {
+                "會員編號": member_id,
+                "會員姓名": member_name,
+                "方案": plan,
+                "堂數": -1,
+                "單堂金額": avg_price,
+                "方案總金額": (avg_price * -1),
+                "教練": coach_id,
+                "付款方式": "上課",
+                "匯款末五碼": "無",
+                "交易日期": today,
+                "交易時間": now_time
+            }
+            batch_data.append(consume_info)
+
+        if error_messages:
+            full_msg = "資料存取失敗：\n" + "\n".join(error_messages)
+            return False, full_msg, {}
+
+        return True, "驗證成功", {"batch_list": batch_data}
 
     except Exception as e:
         return False, f"系統錯誤：{str(e)}", {}
@@ -63,12 +86,20 @@ def validate_consume_record(member_id: str, plan: str, coach: str) -> tuple[bool
 
 def execute_consume_record(data: dict) -> tuple[bool, str]:
     """
-    執行新增上課(扣堂)紀錄
+    執行新增上課(扣堂)紀錄 - 支援批次
+    Args:
+        data: 包含 "batch_list" key 的字典，或單一 record (兼容舊格式)
     """
     try:
-        # 3. 存檔
+        # 3. 準備寫入資料
+        records = []
+        if "batch_list" in data:
+            records = data["batch_list"]
+        else:
+            records = [data]
+
         df_event = gr.GET_DF_FROM_DB(sheet=EVENT_SHEET)
-        df_new = pd.DataFrame([data])
+        df_new = pd.DataFrame(records)
         df_event = pd.concat([df_event, df_new], ignore_index=True)
 
         success, msg = gr.SAVE_TO_SHEET(df=df_event, sheet=EVENT_SHEET)
@@ -80,7 +111,8 @@ def execute_consume_record(data: dict) -> tuple[bool, str]:
             except Exception as e:
                 return True, f"上課紀錄儲存成功，但主表更新失敗: {e}"
 
-            return True, "新增上課紀錄成功！"
+            count = len(records)
+            return True, f"成功新增 {count} 筆上課紀錄！"
         else:
             return False, msg
 

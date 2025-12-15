@@ -74,11 +74,11 @@ coach_list = get_coach_list(COACH)
 
 def get_plan_list(menu_sheet: str = MENU) -> list[str]:
     df_menu = gr.GET_DF_FROM_DB(sheet=menu_sheet)
-    return set(df_menu["name"].tolist())
+    return df_menu["name"].unique().tolist()
 
 
 plan_list = get_plan_list(MENU)
-consume_list = list(plan_list)
+consume_list = plan_list.copy()
 consume_list.append("特殊課程")
 
 # --- Helper Functions for Confirmation ---
@@ -94,6 +94,17 @@ def get_execute_func(action_type):
         return C_consume.execute_consume_record
     return None
 
+
+def get_member_selection_list() -> list[str]:
+    try:
+        df_member = gr.GET_DF_FROM_DB(MEMBER_SHEET)
+        # Format: "會員編號 - 會員姓名"
+        return [f"{row['會員編號']} - {row['會員姓名']}" for _, row in df_member.iterrows()]
+    except Exception:
+        return []
+
+member_selection_list = get_member_selection_list()
+
 @st.dialog("資料確認")
 def run_confirmation_dialog():
     if "confirm_data" not in st.session_state or "confirm_action" not in st.session_state:
@@ -105,9 +116,28 @@ def run_confirmation_dialog():
 
     st.write("請再次確認以下資料：")
     
-    # Display data in a nice format
-    for key, value in data.items():
-        st.write(f"**{key}**: {value}")
+    # Check if it's batch data for consume
+    if "batch_list" in data:
+        st.write(f"**即將批次處理 {len(data['batch_list'])} 筆資料**")
+        if data['batch_list']:
+            # Display common info from first record
+            first = data['batch_list'][0]
+            st.write(f"**方案**: {first['方案']}")
+            st.write(f"**教練**: {gr.GET_DF_FROM_DB(COACH)[gr.GET_DF_FROM_DB(COACH)['教練編號'] == first['教練']]['姓名'].iloc[0] if '教練' in first else '未知'}")
+            
+            # Create a simple DataFrame for display
+            display_data = []
+            for item in data['batch_list']:
+                display_data.append({
+                    "會員編號": item['會員編號'],
+                    "會員姓名": item['會員姓名'],
+                    "扣除堂數": abs(item['堂數'])
+                })
+            st.dataframe(pd.DataFrame(display_data), hide_index=True)
+    else:
+        # Display data in a nice format (Single Record)
+        for key, value in data.items():
+            st.write(f"**{key}**: {value}")
 
     col1, col2 = st.columns(2)
     
@@ -292,7 +322,13 @@ elif page == "會員上課":
     with st.form("consume_form"):
         col1, col2 = st.columns(2)
         with col1:
-            member_id = st.text_input("會員編號", placeholder='請輸入完整會員編號')
+            # Replace text_input with multiselect
+            selected_members = st.multiselect(
+                "選擇會員 (可多選)", 
+                member_selection_list,
+                placeholder='請搜尋並選擇會員'
+            )
+            
             coach = st.selectbox(
                 "教練", coach_list,
                 format_func=lambda x: f"{x}",
@@ -306,7 +342,18 @@ elif page == "會員上課":
         submitted = st.form_submit_button("確認送出")
 
         if submitted:
-            success, msg, data = C_consume.validate_consume_record(member_id, plan, coach)
+            # Extract Member IDs
+            # Format is "{id} - {name}", split by " - " and take first part
+            member_ids = []
+            if selected_members:
+                for item in selected_members:
+                    try:
+                        mid = item.split(" - ")[0]
+                        member_ids.append(mid)
+                    except:
+                        pass
+            
+            success, msg, data = C_consume.validate_consume_record(member_ids, plan, coach)
 
             if success:
                 st.session_state.confirm_data = data
