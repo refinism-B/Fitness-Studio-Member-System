@@ -10,6 +10,7 @@ from mod import C_consume
 from mod import D_main_table
 from mod import E_customized_course
 from mod import F_refund
+from mod import O_backup  # Added backup module
 from mod import O_general as gr
 from mod.O_config import MAIN_SHEET, MEMBER_SHEET, EVENT_SHEET, COACH, MENU, ADMIN_PASSWORD
 import streamlit as st
@@ -164,6 +165,14 @@ def run_confirmation_dialog():
             success, msg = func(data)
             if success:
                 st.success(msg)
+                
+                # Auto Backup
+                bk_success, bk_msg = O_backup.backup_flow()
+                if bk_success:
+                    st.toast(f"✅ 自動備份成功 ({bk_msg})")
+                else:
+                    st.error(f"⚠️ 自動備份失敗: {bk_msg}")
+
                 # Clear confirmation state
                 del st.session_state.confirm_data
                 del st.session_state.confirm_action
@@ -464,13 +473,21 @@ elif page == "會員退款":
 
 # --- Page: 手動更新 ---
 elif page == "手動更新":
-    st.title("🔄 手動更新主表")
+    st.title("🔄 手動更新並備份主表")
     st.info("此功能會重新計算所有交易紀錄並更新主表。")
 
     if st.button("執行更新"):
         success, msg = D_main_table.D_update_main_data()
         if success:
             st.success(msg)
+            
+            # Auto Backup
+            bk_success, bk_msg = O_backup.backup_flow()
+            if bk_success:
+                st.toast(f"✅ 自動備份成功 ({bk_msg})")
+            else:
+                st.error(f"⚠️ 自動備份失敗: {bk_msg}")
+                
             st.cache_data.clear()
             show_main_table()
         else:
