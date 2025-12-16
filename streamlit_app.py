@@ -9,6 +9,7 @@ from mod import B_purchase
 from mod import C_consume
 from mod import D_main_table
 from mod import E_customized_course
+from mod import F_refund
 from mod import O_general as gr
 from mod.O_config import MAIN_SHEET, MEMBER_SHEET, EVENT_SHEET, COACH, MENU, ADMIN_PASSWORD
 import streamlit as st
@@ -51,6 +52,9 @@ if st.sidebar.button("💰 購買課程", use_container_width=True):
 
 if st.sidebar.button("🏋️ 會員上課", use_container_width=True):
     set_page("會員上課")
+
+if st.sidebar.button("💸 會員退款", use_container_width=True):
+    set_page("會員退款")
 
 if st.sidebar.button("🔄 手動更新", use_container_width=True):
     set_page("手動更新")
@@ -103,6 +107,8 @@ def get_execute_func(action_type):
         return E_customized_course.execute_customized_course_record
     elif action_type == "consume":
         return C_consume.execute_consume_record
+    elif action_type == "refund":
+        return F_refund.execute_refund
     return None
 
 
@@ -262,7 +268,13 @@ elif page == "購買課程":
         with st.form("purchase_form"):
             col1, col2 = st.columns(2)
             with col1:
-                member_id = st.text_input("會員編號", placeholder='請輸入完整會員編號')
+                selected_members_normal = st.multiselect(
+                    "選擇會員 (單選)", 
+                    member_selection_list,
+                    placeholder='請選擇會員',
+                    max_selections=1,
+                    key="purchase_normal_member"
+                )
                 plan = st.selectbox(
                     "購買方案", plan_list, format_func=lambda x: f"{x}", index=None, placeholder='請選擇購買方案')
                 payment = st.selectbox(
@@ -281,6 +293,13 @@ elif page == "購買課程":
             submitted = st.form_submit_button("確認送出")
 
             if submitted:
+                member_id = ""
+                if selected_members_normal:
+                    try:
+                        member_id = selected_members_normal[0].split(" - ")[0]
+                    except:
+                        pass
+
                 success, msg, data = B_purchase.validate_purchase_record(
                     member_id, plan, count_selection, payment, coach, account_id
                 )
@@ -296,7 +315,13 @@ elif page == "購買課程":
         with st.form("customized_purchase_form"):
             col1, col2 = st.columns(2)
             with col1:
-                member_id = st.text_input("會員編號", placeholder='請輸入完整會員編號')
+                selected_members_custom = st.multiselect(
+                    "選擇會員 (單選)", 
+                    member_selection_list,
+                    placeholder='請選擇會員',
+                    max_selections=1,
+                    key="purchase_custom_member"
+                )
                 # 特殊課程不需選擇方案，強制固定
                 count_selection = st.number_input("購買堂數", step=1, placeholder="請輸入購買堂數")
                 payment = st.selectbox(
@@ -315,6 +340,13 @@ elif page == "購買課程":
             submitted = st.form_submit_button("確認送出")
 
             if submitted:
+                member_id = ""
+                if selected_members_custom:
+                    try:
+                        member_id = selected_members_custom[0].split(" - ")[0]
+                    except:
+                        pass
+
                 success, msg, data = E_customized_course.validate_customized_course_record(
                     member_id, count_selection, price, payment, coach, account_id
                 )
@@ -375,6 +407,57 @@ elif page == "會員上課":
                 st.rerun()
             else:
                 st.error(msg)
+
+    st.divider()
+    show_main_table()
+
+# --- Page: 會員退款 ---
+elif page == "會員退款":
+    st.title("💸 會員退款")
+    st.info("⚠️ 注意：此功能將會把該會員指定方案的「剩餘堂數」與「剩餘預收款項」全部扣除（歸零）。")
+
+    with st.form("refund_form"):
+        col1, col2 = st.columns(2)
+        with col1:
+            selected_members = st.multiselect(
+                "選擇會員 (單選)", 
+                member_selection_list,
+                placeholder='請選擇一位會員',
+                max_selections=1
+            )
+            
+            coach = st.selectbox(
+                "確認教練", coach_list,
+                format_func=lambda x: f"{x}",
+                index=None,
+                placeholder='請選擇退款教練')
+
+        with col2:
+            plan = st.selectbox(
+                "退款方案", consume_list, format_func=lambda x: f"{x}", index=None, placeholder='請選擇要退款的方案')
+
+        submitted = st.form_submit_button("確認退款內容")
+
+        if submitted:
+            member_id = ""
+            if selected_members:
+                # 雖然限制 max_selections=1，但回傳仍是 list
+                try:
+                    member_id = selected_members[0].split(" - ")[0]
+                except:
+                    pass
+            else:
+                 st.error("請選擇一位會員")
+
+            if member_id:
+                success, msg, data = F_refund.validate_refund(member_id, plan, coach)
+
+                if success:
+                    st.session_state.confirm_data = data
+                    st.session_state.confirm_action = "refund"
+                    st.rerun()
+                else:
+                    st.error(msg)
 
     st.divider()
     show_main_table()
