@@ -271,9 +271,33 @@ elif page == "新增會員":
 elif page == "購買課程":
     st.title("💰 購買課程")
 
-    purchase_type = st.radio("課程類型", ["一般課程", "特殊課程"], horizontal=True)
+    st.markdown("""
+    <style>
+        /* 只針對 Tabs 的按鈕，不影響其他按鈕 */
+        .stTabs [data-baseweb="tab-list"] button {
+            font-size: 24px;
+            font-weight: medium;
+            gap: 35px;
+            padding: 12px 20px;
+            margin: 0 5px;
+            min-width: 120px;
+        }
+        
+        .stTabs [data-baseweb="tab-list"] button [data-testid="stMarkdownContainer"] p {
+            font-size: 16px;
+            font-weight: medium;
+        }
 
-    if purchase_type == "一般課程":
+        /* 調整標籤頁容器高度 */
+        .stTabs [data-baseweb="tab-panel"] {
+            padding: 40px;  /* 內邊距 */
+        }
+    </style>
+    """, unsafe_allow_html=True)
+
+    tab1, tab2 = st.tabs(["一般課程", "特殊課程"])
+
+    with tab1:
         with st.form("purchase_form"):
             col1, col2 = st.columns(2)
             with col1:
@@ -320,7 +344,7 @@ elif page == "購買課程":
                 else:
                     st.error(msg)
     
-    else:  # 特殊課程
+    with tab2:
         with st.form("customized_purchase_form"):
             col1, col2 = st.columns(2)
             with col1:
