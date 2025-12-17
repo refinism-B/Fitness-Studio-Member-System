@@ -5,9 +5,11 @@ from datetime import datetime
 import pandas as pd
 
 
-def get_birthday_member():
-    df_event = gr.GET_DF_FROM_DB(sheet=EVENT_SHEET)
-    df_member = gr.GET_DF_FROM_DB(sheet=MEMBER_SHEET)
+def get_birthday_member(df_event: pd.DataFrame = None, df_member: pd.DataFrame = None):
+    if df_event is None:
+        df_event = gr.GET_DF_FROM_DB(sheet=EVENT_SHEET)
+    if df_member is None:
+        df_member = gr.GET_DF_FROM_DB(sheet=MEMBER_SHEET)
     df_member["生日"] = pd.to_datetime(df_member["生日"])
 
     month = datetime.now().month

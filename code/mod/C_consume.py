@@ -5,9 +5,10 @@ from mod import O_general as gr
 from mod.O_config import EVENT_SHEET
 
 
-def get_member_stock(member_id: str, plan: str) -> pd.DataFrame:
+def get_member_stock(member_id: str, plan: str, df_event: pd.DataFrame = None) -> pd.DataFrame:
     """取得特定會員特定方案的庫存狀況"""
-    df_event = gr.GET_DF_FROM_DB(sheet=EVENT_SHEET)
+    if df_event is None:
+        df_event = gr.GET_DF_FROM_DB(sheet=EVENT_SHEET)
     # 使用 D_main_table 的邏輯計算剩餘堂數
     df_sum = mt.get_sum_table(df_event)
 
@@ -17,7 +18,7 @@ def get_member_stock(member_id: str, plan: str) -> pd.DataFrame:
     return df_sum[mask1 & mask2]
 
 
-def validate_consume_record(member_id_list: list[str], plan: str, coach: str) -> tuple[bool, str, dict]:
+def validate_consume_record(member_id_list: list[str], plan: str, coach: str, df_event: pd.DataFrame = None, df_member: pd.DataFrame = None, df_coach: pd.DataFrame = None) -> tuple[bool, str, dict]:
     """
     驗證上課(扣堂)紀錄 - 支援批次處理
     Args:
@@ -34,16 +35,19 @@ def validate_consume_record(member_id_list: list[str], plan: str, coach: str) ->
         batch_data = []
         error_messages = []
 
+        batch_data = []
+        error_messages = []
+
         # 取得教練ID一次即可
-        coach_id, _ = gr.get_coach_id(coach)
+        coach_id, _ = gr.get_coach_id(coach, df_coach=df_coach)
         today = datetime.now().date().strftime("%Y-%m-%d")
         now_time = datetime.now().time().strftime("%H:%M:%S")
 
         for member_id in member_id_list:
             # 1. 檢查是否有庫存
-            df_result = get_member_stock(member_id, plan)
+            df_result = get_member_stock(member_id, plan, df_event=df_event)
             try:
-                member_name = gr.get_member_name(member_id)
+                member_name = gr.get_member_name(member_id, df_member=df_member)
             except Exception:
                 member_name = "未知會員"
 
@@ -84,7 +88,7 @@ def validate_consume_record(member_id_list: list[str], plan: str, coach: str) ->
         return False, f"系統錯誤：{str(e)}", {}
 
 
-def execute_consume_record(data: dict) -> tuple[bool, str]:
+def execute_consume_record(data: dict, df_event: pd.DataFrame = None, df_member: pd.DataFrame = None) -> tuple[bool, str]:
     """
     執行新增上課(扣堂)紀錄 - 支援批次
     Args:
@@ -98,7 +102,8 @@ def execute_consume_record(data: dict) -> tuple[bool, str]:
         else:
             records = [data]
 
-        df_event = gr.GET_DF_FROM_DB(sheet=EVENT_SHEET)
+        if df_event is None:
+            df_event = gr.GET_DF_FROM_DB(sheet=EVENT_SHEET)
         df_new = pd.DataFrame(records)
         df_event = pd.concat([df_event, df_new], ignore_index=True)
 
@@ -107,7 +112,7 @@ def execute_consume_record(data: dict) -> tuple[bool, str]:
         if success:
             # 4. 更新主表
             try:
-                mt.D_update_main_data()
+                mt.D_update_main_data(df_event=df_event, df_member=df_member)
             except Exception as e:
                 return True, f"上課紀錄儲存成功，但主表更新失敗: {e}"
 

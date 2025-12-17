@@ -13,10 +13,11 @@ def validate_account_id(payment: str, account_id: str) -> bool:
     return True
 
 
-def get_price_and_total(plan: str, count: int) -> tuple[float, int]:
+def get_price_and_total(plan: str, count: int, df_menu: pd.DataFrame = None) -> tuple[float, int]:
     """取得單價與總價"""
 
-    df_menu = gr.GET_DF_FROM_DB(sheet=MENU)
+    if df_menu is None:
+        df_menu = gr.GET_DF_FROM_DB(sheet=MENU)
     df_menu["price"] = df_menu["price"].astype(float)
 
     # 嘗試直接對應 Plan 與 Count
@@ -38,7 +39,7 @@ def get_price_and_total(plan: str, count: int) -> tuple[float, int]:
     return price, total
 
 
-def validate_purchase_record(member_id: str, plan: str, count_selection: str, payment: str, coach: str, account_id: str = "無") -> tuple[bool, str, dict]:
+def validate_purchase_record(member_id: str, plan: str, count_selection: str, payment: str, coach: str, account_id: str = "無", df_member: pd.DataFrame = None, df_menu: pd.DataFrame = None, df_coach: pd.DataFrame = None) -> tuple[bool, str, dict]:
     """
     驗證購買紀錄
     Returns:
@@ -46,7 +47,8 @@ def validate_purchase_record(member_id: str, plan: str, count_selection: str, pa
     """
     try:
         # 1. 驗證會員是否存在
-        df_member = gr.GET_DF_FROM_DB(sheet=MEMBER_SHEET)
+        if df_member is None:
+            df_member = gr.GET_DF_FROM_DB(sheet=MEMBER_SHEET)
         mask_member = (df_member["會員編號"] == member_id)
         if df_member[mask_member].empty:
             return False, "查無此會員資料 (姓名與Email不符或不存在)", {}
@@ -77,15 +79,15 @@ def validate_purchase_record(member_id: str, plan: str, count_selection: str, pa
 
         # 4. 計算價格
         try:
-            price, total = get_price_and_total(plan, final_count)
+            price, total = get_price_and_total(plan, final_count, df_menu=df_menu)
         except ValueError as e:
             return False, str(e), {}
 
         # 5. 準備資料
         today = datetime.now().date().strftime("%Y-%m-%d")
         now_time = datetime.now().time().strftime("%H:%M:%S")
-        coach_id, _ = gr.get_coach_id(coach)
-        member_name = gr.get_member_name(member_id)
+        coach_id, _ = gr.get_coach_id(coach, df_coach=df_coach)
+        member_name = gr.get_member_name(member_id, df_member=df_member)
 
         purchase_info = {
             "會員編號": member_id,
@@ -107,13 +109,14 @@ def validate_purchase_record(member_id: str, plan: str, count_selection: str, pa
         return False, f"系統錯誤：{str(e)}", {}
 
 
-def execute_purchase_record(data: dict) -> tuple[bool, str]:
+def execute_purchase_record(data: dict, df_event: pd.DataFrame = None, df_member: pd.DataFrame = None) -> tuple[bool, str]:
     """
     執行新增購買紀錄
     """
     try:
         # 6. 存檔
-        df_event = gr.GET_DF_FROM_DB(sheet=EVENT_SHEET)
+        if df_event is None:
+            df_event = gr.GET_DF_FROM_DB(sheet=EVENT_SHEET)
         df_new = pd.DataFrame([data])
         df_event = pd.concat([df_event, df_new], ignore_index=True)
 
@@ -122,7 +125,8 @@ def execute_purchase_record(data: dict) -> tuple[bool, str]:
         if success:
             # 7. 更新主表
             try:
-                mt.D_update_main_data()
+                # Pass updated df_event and (cached or loaded) df_member to update function
+                mt.D_update_main_data(df_event=df_event, df_member=df_member)
             except Exception as e:
                 return True, f"購買紀錄儲存成功，但主表更新失敗: {e}"
 

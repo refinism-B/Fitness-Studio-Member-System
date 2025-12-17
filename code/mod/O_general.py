@@ -87,16 +87,23 @@ def SAVE_TO_SHEET(df: pd.DataFrame, sheet: str):
         return False, f"發生錯誤：{str(e)}"
 
 
-def get_coach_id(coach: str) -> str:
-    df_coach = GET_DF_FROM_DB(sheet=COACH)
+def get_coach_id(coach: str, df_coach: pd.DataFrame = None) -> tuple[str, str]:
+    if df_coach is None:
+        df_coach = GET_DF_FROM_DB(sheet=COACH)
+
     mask = (df_coach["姓名"] == coach)
+    if df_coach[mask].empty:
+        raise ValueError(f"查無教練資料: {coach}")
+
     coach_id = df_coach[mask]["教練編號"].iloc[0]
     coach_str = df_coach[mask]["會員編號"].iloc[0]
     return coach_id, coach_str
 
 
-def get_member_name(member_id: str) -> str:
-    df_member = GET_DF_FROM_DB(sheet=MEMBER_SHEET)
+def get_member_name(member_id: str, df_member: pd.DataFrame = None) -> str:
+    if df_member is None:
+        df_member = GET_DF_FROM_DB(sheet=MEMBER_SHEET)
+
     mask = (df_member["會員編號"] == member_id)
     if df_member[mask].empty:
         raise InputError("查無此會員資料")

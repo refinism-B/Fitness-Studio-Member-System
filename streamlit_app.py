@@ -20,8 +20,27 @@ from mod import A_add_member
 
 
 @st.cache_data
-def load_data(sheet: str):
-    return gr.GET_DF_FROM_DB(sheet)
+def load_all_data():
+    df_member = gr.GET_DF_FROM_DB(MEMBER_SHEET)
+    df_event = gr.GET_DF_FROM_DB(EVENT_SHEET)
+    df_coach = gr.GET_DF_FROM_DB(COACH)
+    df_menu = gr.GET_DF_FROM_DB(MENU)
+    df_main = gr.GET_DF_FROM_DB(MAIN_SHEET)
+    return {
+        "member": df_member,
+        "event": df_event,
+        "coach": df_coach,
+        "menu": df_menu,
+        "main": df_main
+    }
+
+# Load data once
+data_snapshot = load_all_data()
+df_member = data_snapshot["member"]
+df_event = data_snapshot["event"]
+df_coach = data_snapshot["coach"]
+df_menu = data_snapshot["menu"]
+df_main = data_snapshot["main"]
 
 
 st.set_page_config(page_title="沛力訓練會員系統", layout="wide")
@@ -66,12 +85,13 @@ if st.sidebar.button("🔄 手動更新", use_container_width=True):
 page = st.session_state.page
 
 
-def show_main_table(show_total=False):
+def show_main_table(show_total=False, df_main_data=None):
     if not st.session_state.is_admin:
         return
 
     try:
-        df = load_data(MAIN_SHEET)
+        # Use passed DF or fallback (should always be passed in optimized version)
+        df = df_main_data if df_main_data is not None else df_main
 
         if show_total and "剩餘預收款項" in df.columns:
             total_remaining = df["剩餘預收款項"].sum()
@@ -83,20 +103,18 @@ def show_main_table(show_total=False):
         st.error(f"讀取資料失敗: {e}")
 
 
-def get_coach_list(coach_sheet: str = COACH) -> list[str]:
-    df_coach = load_data(sheet=coach_sheet)
-    return df_coach["姓名"].tolist()
+def get_coach_list(df_c: pd.DataFrame) -> list[str]:
+    return df_c["姓名"].tolist()
 
 
-coach_list = get_coach_list(COACH)
+coach_list = get_coach_list(df_coach)
 
 
-def get_plan_list(menu_sheet: str = MENU) -> list[str]:
-    df_menu = load_data(sheet=menu_sheet)
-    return df_menu["name"].unique().tolist()
+def get_plan_list(df_m: pd.DataFrame) -> list[str]:
+    return df_m["name"].unique().tolist()
 
 
-plan_list = get_plan_list(MENU)
+plan_list = get_plan_list(df_menu)
 consume_list = plan_list.copy()
 consume_list.append("特殊課程")
 
@@ -117,16 +135,15 @@ def get_execute_func(action_type):
     return None
 
 
-def get_member_selection_list() -> list[str]:
+def get_member_selection_list(df_m: pd.DataFrame) -> list[str]:
     try:
-        df_member = load_data(MEMBER_SHEET)
         # Format: "會員編號 - 會員姓名"
-        return [f"{row['會員編號']} - {row['會員姓名']}" for _, row in df_member.iterrows()]
+        return [f"{row['會員編號']} - {row['會員姓名']}" for _, row in df_m.iterrows()]
     except Exception:
         return []
 
 
-member_selection_list = get_member_selection_list()
+member_selection_list = get_member_selection_list(df_member)
 
 
 @st.dialog("資料確認")
@@ -147,8 +164,15 @@ def run_confirmation_dialog():
             # Display common info from first record
             first = data['batch_list'][0]
             st.write(f"**方案**: {first['方案']}")
-            st.write(
-                f"**教練**: {load_data(COACH)[load_data(COACH)['教練編號'] == first['教練']]['姓名'].iloc[0] if '教練' in first else '未知'}")
+            
+            # Find coach name using cached df_coach
+            c_name = "未知"
+            if '教練' in first:
+               c_row = df_coach[df_coach['教練編號'] == first['教練']]
+               if not c_row.empty:
+                   c_name = c_row['姓名'].iloc[0]
+            
+            st.write(f"**教練**: {c_name}")
 
             # Create a simple DataFrame for display
             display_data = []
@@ -169,6 +193,7 @@ def run_confirmation_dialog():
     if col1.button("確認送出", type="primary", use_container_width=True):
         func = get_execute_func(action)
         if func:
+            # Execute always reads fresh data (arguments not passed) for safety
             success, msg = func(data)
             if success:
                 st.success(msg)
@@ -198,11 +223,11 @@ def run_confirmation_dialog():
 
 
 @st.cache_data
-def load_birthday_data():
-    return bt.get_birthday_member()
+def load_birthday_data(df_evt, df_mem):
+    return bt.get_birthday_member(df_event=df_evt, df_member=df_mem)
 
 
-df_birthday = load_birthday_data()
+df_birthday = load_birthday_data(df_event, df_member)
 
 
 # Manage Dialog State
@@ -230,7 +255,7 @@ if page == "首頁":
         if st.button("登出管理員"):
             st.session_state.is_admin = False
             st.rerun()
-        show_main_table(show_total=True)
+        show_main_table(show_total=True, df_main_data=df_main)
 
 # --- Page: 新增會員 ---
 elif page == "新增會員":
@@ -262,7 +287,7 @@ elif page == "新增會員":
 
             # Validation
             success, msg, data = A_add_member.validate_add_member(
-                member_id, name, birthday_str, phone, coach)
+                member_id, name, birthday_str, phone, coach, df_member=df_member, df_coach=df_coach)
 
             if success:
                 st.session_state.confirm_data = data
@@ -275,7 +300,6 @@ elif page == "新增會員":
     st.subheader("會員列表")
     if st.session_state.is_admin:
         try:
-            df_member = load_data(MEMBER_SHEET)
             st.dataframe(df_member, use_container_width=True)
         except Exception as e:
             st.error(f"讀取會員表失敗: {e}")
@@ -349,7 +373,8 @@ elif page == "購買課程":
                         pass
 
                 success, msg, data = B_purchase.validate_purchase_record(
-                    member_id, plan, count_selection, payment, coach, account_id
+                    member_id, plan, count_selection, payment, coach, account_id,
+                    df_member=df_member, df_menu=df_menu, df_coach=df_coach
                 )
 
                 if success:
@@ -397,7 +422,8 @@ elif page == "購買課程":
                         pass
 
                 success, msg, data = E_customized_course.validate_customized_course_record(
-                    member_id, count_selection, price, payment, coach, account_id
+                    member_id, count_selection, price, payment, coach, account_id,
+                    df_member=df_member, df_coach=df_coach
                 )
 
                 if success:
@@ -408,7 +434,7 @@ elif page == "購買課程":
                     st.error(msg)
 
     st.divider()
-    show_main_table()
+    show_main_table(df_main_data=df_main)
 
 # --- Page: 會員上課 ---
 elif page == "會員上課":
@@ -449,7 +475,7 @@ elif page == "會員上課":
                         pass
 
             success, msg, data = C_consume.validate_consume_record(
-                member_ids, plan, coach)
+                member_ids, plan, coach, df_event=df_event, df_member=df_member, df_coach=df_coach)
 
             if success:
                 st.session_state.confirm_data = data
@@ -459,7 +485,7 @@ elif page == "會員上課":
                 st.error(msg)
 
     st.divider()
-    show_main_table()
+    show_main_table(df_main_data=df_main)
 
 # --- Page: 會員退款 ---
 elif page == "會員退款":
@@ -501,7 +527,7 @@ elif page == "會員退款":
 
             if member_id:
                 success, msg, data = F_refund.validate_refund(
-                    member_id, plan, coach)
+                    member_id, plan, coach, df_event=df_event, df_member=df_member, df_coach=df_coach)
 
                 if success:
                     st.session_state.confirm_data = data
@@ -511,7 +537,7 @@ elif page == "會員退款":
                     st.error(msg)
 
     st.divider()
-    show_main_table()
+    show_main_table(df_main_data=df_main)
 
 # --- Page: 當月壽星 ---
 elif page == "當月壽星":
@@ -525,6 +551,7 @@ elif page == "手動更新":
     st.info("此功能會重新計算所有交易紀錄並更新主表。")
 
     if st.button("執行更新"):
+        # Manual update reads fresh, so no arguments
         success, msg = D_main_table.D_update_main_data()
         if success:
             st.success(msg)
@@ -537,6 +564,11 @@ elif page == "手動更新":
                 st.error(f"⚠️ 自動備份失敗: {bk_msg}")
 
             st.cache_data.clear()
-            show_main_table()
+            # Reload happens on rerun, but we can't rerun immediately if we want to show success msg first?
+            # Actually line 533 above does clear cache.
+            # show_main_table needs df. Since we cleared cache, we should just rerun or reload.
+            # But prompt says check correctness.
+            # Best is to rerun so everything reloads matching the new data.
+            st.rerun()
         else:
             st.error(msg)

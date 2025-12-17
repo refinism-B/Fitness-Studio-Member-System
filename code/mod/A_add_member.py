@@ -66,7 +66,7 @@ def check_duplicates(df_member: pd.DataFrame, name: str, birthday: str, member_i
     return result
 
 
-def validate_add_member(member_id: str, name: str, birthday: str, phone: str, coach: str) -> tuple[bool, str, dict]:
+def validate_add_member(member_id: str, name: str, birthday: str, phone: str, coach: str, df_member: pd.DataFrame = None, df_coach: pd.DataFrame = None) -> tuple[bool, str, dict]:
     """
     驗證新增會員資料
     Returns:
@@ -88,9 +88,10 @@ def validate_add_member(member_id: str, name: str, birthday: str, phone: str, co
 
     try:
         # 2. 讀取現有會員資料
-        df_member = gr.GET_DF_FROM_DB(sheet=MEMBER_SHEET)
+        if df_member is None:
+            df_member = gr.GET_DF_FROM_DB(sheet=MEMBER_SHEET)
         try:
-            coach_id, coach_str = gr.get_coach_id(coach)
+            coach_id, coach_str = gr.get_coach_id(coach, df_coach=df_coach)
             member_id_formatted = str(coach_str) + str(member_id)
         except Exception as e:
             return False, f"取得教練資料失敗: {str(e)}", {}
@@ -121,12 +122,13 @@ def validate_add_member(member_id: str, name: str, birthday: str, phone: str, co
         return False, f"系統錯誤：{str(e)}", {}
 
 
-def execute_add_member(data: dict) -> tuple[bool, str]:
+def execute_add_member(data: dict, df_member: pd.DataFrame = None) -> tuple[bool, str]:
     """
     執行新增會員資料
     """
     try:
-        df_member = gr.GET_DF_FROM_DB(sheet=MEMBER_SHEET)
+        if df_member is None:
+            df_member = gr.GET_DF_FROM_DB(sheet=MEMBER_SHEET)
         df_new = pd.DataFrame([data])
         
         # 5. 合併並存檔
