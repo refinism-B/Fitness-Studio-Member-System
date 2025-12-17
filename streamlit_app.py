@@ -4,24 +4,24 @@ import os
 # Add 'code' directory to sys.path to allow importing 'mod'
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'code'))
 
-from mod import A_add_member
-from mod import B_purchase
-from mod import C_consume
-from mod import D_main_table
-from mod import E_customized_course
-from mod import F_refund
-from mod import O_backup  # Added backup module
-from mod import O_general as gr
-from mod.O_config import MAIN_SHEET, MEMBER_SHEET, EVENT_SHEET, COACH, MENU, ADMIN_PASSWORD
-import streamlit as st
-import pandas as pd
 from datetime import datetime
+import pandas as pd
+import streamlit as st
+from mod import G_birthday as bt
+from mod.O_config import MAIN_SHEET, MEMBER_SHEET, EVENT_SHEET, COACH, MENU, ADMIN_PASSWORD
+from mod import O_general as gr
+from mod import O_backup  # Added backup module
+from mod import F_refund
+from mod import E_customized_course
+from mod import D_main_table
+from mod import C_consume
+from mod import B_purchase
+from mod import A_add_member
 
 
 @st.cache_data
 def load_data(sheet: str):
     return gr.GET_DF_FROM_DB(sheet)
-
 
 
 st.set_page_config(page_title="沛力訓練會員系統", layout="wide")
@@ -57,6 +57,9 @@ if st.sidebar.button("🏋️ 會員上課", use_container_width=True):
 if st.sidebar.button("💸 會員退款", use_container_width=True):
     set_page("會員退款")
 
+if st.sidebar.button("🎂 當月壽星", use_container_width=True):
+    set_page("當月壽星")
+
 if st.sidebar.button("🔄 手動更新", use_container_width=True):
     set_page("手動更新")
 
@@ -69,7 +72,7 @@ def show_main_table(show_total=False):
 
     try:
         df = load_data(MAIN_SHEET)
-        
+
         if show_total and "剩餘預收款項" in df.columns:
             total_remaining = df["剩餘預收款項"].sum()
             st.subheader(f"剩餘預收款項總額：{int(total_remaining):,} 元")
@@ -99,6 +102,7 @@ consume_list.append("特殊課程")
 
 # --- Helper Functions for Confirmation ---
 
+
 def get_execute_func(action_type):
     if action_type == "add_member":
         return A_add_member.execute_add_member
@@ -121,7 +125,9 @@ def get_member_selection_list() -> list[str]:
     except Exception:
         return []
 
+
 member_selection_list = get_member_selection_list()
+
 
 @st.dialog("資料確認")
 def run_confirmation_dialog():
@@ -133,7 +139,7 @@ def run_confirmation_dialog():
     action = st.session_state.confirm_action
 
     st.write("請再次確認以下資料：")
-    
+
     # Check if it's batch data for consume
     if "batch_list" in data:
         st.write(f"**即將批次處理 {len(data['batch_list'])} 筆資料**")
@@ -141,8 +147,9 @@ def run_confirmation_dialog():
             # Display common info from first record
             first = data['batch_list'][0]
             st.write(f"**方案**: {first['方案']}")
-            st.write(f"**教練**: {load_data(COACH)[load_data(COACH)['教練編號'] == first['教練']]['姓名'].iloc[0] if '教練' in first else '未知'}")
-            
+            st.write(
+                f"**教練**: {load_data(COACH)[load_data(COACH)['教練編號'] == first['教練']]['姓名'].iloc[0] if '教練' in first else '未知'}")
+
             # Create a simple DataFrame for display
             display_data = []
             for item in data['batch_list']:
@@ -158,14 +165,14 @@ def run_confirmation_dialog():
             st.write(f"**{key}**: {value}")
 
     col1, col2 = st.columns(2)
-    
+
     if col1.button("確認送出", type="primary", use_container_width=True):
         func = get_execute_func(action)
         if func:
             success, msg = func(data)
             if success:
                 st.success(msg)
-                
+
                 # Auto Backup
                 bk_success, bk_msg = O_backup.backup_flow()
                 if bk_success:
@@ -188,6 +195,14 @@ def run_confirmation_dialog():
         del st.session_state.confirm_data
         del st.session_state.confirm_action
         st.rerun()
+
+
+@st.cache_data
+def load_birthday_data():
+    return bt.get_birthday_member()
+
+
+df_birthday = load_birthday_data()
 
 
 # Manage Dialog State
@@ -244,7 +259,7 @@ elif page == "新增會員":
         if submitted:
             # Convert date to string
             birthday_str = birthday.strftime("%Y-%m-%d")
-            
+
             # Validation
             success, msg, data = A_add_member.validate_add_member(
                 member_id, name, birthday_str, phone, coach)
@@ -302,7 +317,7 @@ elif page == "購買課程":
             col1, col2 = st.columns(2)
             with col1:
                 selected_members_normal = st.multiselect(
-                    "選擇會員 (單選)", 
+                    "選擇會員 (單選)",
                     member_selection_list,
                     placeholder='請選擇會員',
                     max_selections=1,
@@ -343,20 +358,21 @@ elif page == "購買課程":
                     st.rerun()
                 else:
                     st.error(msg)
-    
+
     with tab2:
         with st.form("customized_purchase_form"):
             col1, col2 = st.columns(2)
             with col1:
                 selected_members_custom = st.multiselect(
-                    "選擇會員 (單選)", 
+                    "選擇會員 (單選)",
                     member_selection_list,
                     placeholder='請選擇會員',
                     max_selections=1,
                     key="purchase_custom_member"
                 )
                 # 特殊課程不需選擇方案，強制固定
-                count_selection = st.number_input("購買堂數", step=1, placeholder="請輸入購買堂數")
+                count_selection = st.number_input(
+                    "購買堂數", step=1, placeholder="請輸入購買堂數")
                 payment = st.selectbox(
                     "付款方式", ["現金", "匯款"], index=None, placeholder='請選擇付款方式')
 
@@ -403,11 +419,11 @@ elif page == "會員上課":
         with col1:
             # Replace text_input with multiselect
             selected_members = st.multiselect(
-                "選擇會員 (可多選)", 
+                "選擇會員 (可多選)",
                 member_selection_list,
                 placeholder='請搜尋並選擇會員'
             )
-            
+
             coach = st.selectbox(
                 "教練", coach_list,
                 format_func=lambda x: f"{x}",
@@ -431,8 +447,9 @@ elif page == "會員上課":
                         member_ids.append(mid)
                     except:
                         pass
-            
-            success, msg, data = C_consume.validate_consume_record(member_ids, plan, coach)
+
+            success, msg, data = C_consume.validate_consume_record(
+                member_ids, plan, coach)
 
             if success:
                 st.session_state.confirm_data = data
@@ -453,12 +470,12 @@ elif page == "會員退款":
         col1, col2 = st.columns(2)
         with col1:
             selected_members = st.multiselect(
-                "選擇會員 (單選)", 
+                "選擇會員 (單選)",
                 member_selection_list,
                 placeholder='請選擇一位會員',
                 max_selections=1
             )
-            
+
             coach = st.selectbox(
                 "確認教練", coach_list,
                 format_func=lambda x: f"{x}",
@@ -480,10 +497,11 @@ elif page == "會員退款":
                 except:
                     pass
             else:
-                 st.error("請選擇一位會員")
+                st.error("請選擇一位會員")
 
             if member_id:
-                success, msg, data = F_refund.validate_refund(member_id, plan, coach)
+                success, msg, data = F_refund.validate_refund(
+                    member_id, plan, coach)
 
                 if success:
                     st.session_state.confirm_data = data
@@ -495,6 +513,12 @@ elif page == "會員退款":
     st.divider()
     show_main_table()
 
+# --- Page: 當月壽星 ---
+elif page == "當月壽星":
+    st.title("🎂 當月壽星")
+    st.subheader(f"本月 ({datetime.now().month}月) 壽星名單")
+    st.dataframe(df_birthday, use_container_width=True)
+
 # --- Page: 手動更新 ---
 elif page == "手動更新":
     st.title("🔄 手動更新並備份主表")
@@ -504,14 +528,14 @@ elif page == "手動更新":
         success, msg = D_main_table.D_update_main_data()
         if success:
             st.success(msg)
-            
+
             # Auto Backup
             bk_success, bk_msg = O_backup.backup_flow()
             if bk_success:
                 st.toast(f"✅ 自動備份成功 ({bk_msg})")
             else:
                 st.error(f"⚠️ 自動備份失敗: {bk_msg}")
-                
+
             st.cache_data.clear()
             show_main_table()
         else:
