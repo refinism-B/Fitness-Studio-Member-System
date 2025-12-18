@@ -18,7 +18,7 @@ def get_member_stock(member_id: str, plan: str, df_event: pd.DataFrame = None) -
     return df_sum[mask1 & mask2]
 
 
-def validate_consume_record(member_id_list: list[str], plan: str, coach: str, df_event: pd.DataFrame = None, df_member: pd.DataFrame = None, df_coach: pd.DataFrame = None) -> tuple[bool, str, dict]:
+def validate_consume_record(member_id_list: list[str], plan: str, coach: str, remarks: str = "", df_event: pd.DataFrame = None, df_member: pd.DataFrame = None, df_coach: pd.DataFrame = None) -> tuple[bool, str, dict]:
     """
     驗證上課(扣堂)紀錄 - 支援批次處理
     Args:
@@ -74,7 +74,8 @@ def validate_consume_record(member_id_list: list[str], plan: str, coach: str, df
                 "付款方式": "上課",
                 "匯款末五碼": "無",
                 "交易日期": today,
-                "交易時間": now_time
+                "交易時間": now_time,
+                "備註": remarks
             }
             batch_data.append(consume_info)
 

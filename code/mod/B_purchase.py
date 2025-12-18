@@ -39,7 +39,7 @@ def get_price_and_total(plan: str, count: int, df_menu: pd.DataFrame = None) -> 
     return price, total
 
 
-def validate_purchase_record(member_id: str, plan: str, count_selection: str, payment: str, coach: str, account_id: str = "無", df_member: pd.DataFrame = None, df_menu: pd.DataFrame = None, df_coach: pd.DataFrame = None) -> tuple[bool, str, dict]:
+def validate_purchase_record(member_id: str, plan: str, count_selection: str, payment: str, coach: str, account_id: str = "無", remarks: str = "", df_member: pd.DataFrame = None, df_menu: pd.DataFrame = None, df_coach: pd.DataFrame = None) -> tuple[bool, str, dict]:
     """
     驗證購買紀錄
     Returns:
@@ -100,7 +100,8 @@ def validate_purchase_record(member_id: str, plan: str, count_selection: str, pa
             "付款方式": payment,
             "匯款末五碼": account_id,
             "交易日期": today,
-            "交易時間": now_time
+            "交易時間": now_time,
+            "備註": remarks
         }
         
         return True, "驗證成功", purchase_info

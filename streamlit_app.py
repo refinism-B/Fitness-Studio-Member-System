@@ -278,6 +278,7 @@ elif page == "新增會員":
             name = st.text_input("會員姓名", placeholder='請輸入會員姓名，中英文不限')
             birthday = st.date_input(
                 "生日", min_value=min_date, max_value=max_date)
+            remarks = st.text_input("備註", max_chars=50, placeholder="最多50字元")
 
         submitted = st.form_submit_button("確認送出")
 
@@ -287,7 +288,7 @@ elif page == "新增會員":
 
             # Validation
             success, msg, data = A_add_member.validate_add_member(
-                member_id, name, birthday_str, phone, coach, df_member=df_member, df_coach=df_coach)
+                member_id, name, birthday_str, phone, coach, remarks, df_member=df_member, df_coach=df_coach)
 
             if success:
                 st.session_state.confirm_data = data
@@ -361,6 +362,7 @@ elif page == "購買課程":
                     "購買堂數", ["1", "4", "8", "16"], index=None, placeholder='請選擇購買堂數')
                 account_id = st.text_input(
                     "匯款末五碼", placeholder='輸入匯款帳號末五碼，若是現金付款請留空')
+                remarks = st.text_input("備註", max_chars=50, placeholder="最多50字元", key="purchase_normal_remarks")
 
             submitted = st.form_submit_button("確認送出")
 
@@ -373,7 +375,7 @@ elif page == "購買課程":
                         pass
 
                 success, msg, data = B_purchase.validate_purchase_record(
-                    member_id, plan, count_selection, payment, coach, account_id,
+                    member_id, plan, count_selection, payment, coach, account_id, remarks,
                     df_member=df_member, df_menu=df_menu, df_coach=df_coach
                 )
 
@@ -410,6 +412,7 @@ elif page == "購買課程":
                 price = st.number_input("單堂金額", step=50, placeholder="請輸入單堂金額")
                 account_id = st.text_input(
                     "匯款末五碼", placeholder='輸入匯款帳號末五碼，若是現金付款請留空')
+                remarks = st.text_input("備註", max_chars=50, placeholder="最多50字元", key="purchase_custom_remarks")
 
             submitted = st.form_submit_button("確認送出")
 
@@ -422,7 +425,7 @@ elif page == "購買課程":
                         pass
 
                 success, msg, data = E_customized_course.validate_customized_course_record(
-                    member_id, count_selection, price, payment, coach, account_id,
+                    member_id, count_selection, price, payment, coach, account_id, remarks,
                     df_member=df_member, df_coach=df_coach
                 )
 
@@ -459,6 +462,7 @@ elif page == "會員上課":
         with col2:
             plan = st.selectbox(
                 "上課方案", consume_list, format_func=lambda x: f"{x}", index=None, placeholder='請選擇上課方案')
+            remarks = st.text_input("備註", max_chars=50, placeholder="最多50字元", key="consume_remarks")
 
         submitted = st.form_submit_button("確認送出")
 
@@ -475,7 +479,7 @@ elif page == "會員上課":
                         pass
 
             success, msg, data = C_consume.validate_consume_record(
-                member_ids, plan, coach, df_event=df_event, df_member=df_member, df_coach=df_coach)
+                member_ids, plan, coach, remarks, df_event=df_event, df_member=df_member, df_coach=df_coach)
 
             if success:
                 st.session_state.confirm_data = data
@@ -511,6 +515,7 @@ elif page == "會員退款":
         with col2:
             plan = st.selectbox(
                 "退款方案", consume_list, format_func=lambda x: f"{x}", index=None, placeholder='請選擇要退款的方案')
+            remarks = st.text_input("備註", max_chars=50, placeholder="最多50字元", key="refund_remarks")
 
         submitted = st.form_submit_button("確認退款內容")
 
@@ -527,7 +532,7 @@ elif page == "會員退款":
 
             if member_id:
                 success, msg, data = F_refund.validate_refund(
-                    member_id, plan, coach, df_event=df_event, df_member=df_member, df_coach=df_coach)
+                    member_id, plan, coach, remarks, df_event=df_event, df_member=df_member, df_coach=df_coach)
 
                 if success:
                     st.session_state.confirm_data = data

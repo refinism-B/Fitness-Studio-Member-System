@@ -13,7 +13,7 @@ def validate_account_id(payment: str, account_id: str) -> bool:
     return True
 
 
-def validate_customized_course_record(member_id: str, count_selection: int, price: int, payment: str, coach: str, account_id: str = "無", df_member: pd.DataFrame = None, df_coach: pd.DataFrame = None) -> tuple[bool, str, dict]:
+def validate_customized_course_record(member_id: str, count_selection: int, price: int, payment: str, coach: str, account_id: str = "無", remarks: str = "", df_member: pd.DataFrame = None, df_coach: pd.DataFrame = None) -> tuple[bool, str, dict]:
     """
     驗證新增購買紀錄
     Returns:
@@ -73,7 +73,8 @@ def validate_customized_course_record(member_id: str, count_selection: int, pric
             "付款方式": payment,
             "匯款末五碼": account_id,
             "交易日期": today,
-            "交易時間": now_time
+            "交易時間": now_time,
+            "備註": remarks
         }
         
         return True, "驗證成功", purchase_info

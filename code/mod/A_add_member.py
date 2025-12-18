@@ -66,7 +66,7 @@ def check_duplicates(df_member: pd.DataFrame, name: str, birthday: str, member_i
     return result
 
 
-def validate_add_member(member_id: str, name: str, birthday: str, phone: str, coach: str, df_member: pd.DataFrame = None, df_coach: pd.DataFrame = None) -> tuple[bool, str, dict]:
+def validate_add_member(member_id: str, name: str, birthday: str, phone: str, coach: str, remarks: str = "", df_member: pd.DataFrame = None, df_coach: pd.DataFrame = None) -> tuple[bool, str, dict]:
     """
     驗證新增會員資料
     Returns:
@@ -112,8 +112,10 @@ def validate_add_member(member_id: str, name: str, birthday: str, phone: str, co
             "生日": formatted_birthday,
             "電話": phone,
             "教練": coach_id,
+            "教練": coach_id,
             "加入日期": today,
-            "加入時間": now_time
+            "加入時間": now_time,
+            "備註": remarks
         }
         
         return True, "驗證成功", new_member_data

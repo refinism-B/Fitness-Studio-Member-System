@@ -22,7 +22,7 @@ def get_member_stock(member_id: str, plan: str, df_event: pd.DataFrame = None, d
         return pd.DataFrame()
 
 
-def validate_refund(member_id: str, plan: str, coach_name: str, df_event: pd.DataFrame = None, df_member: pd.DataFrame = None, df_coach: pd.DataFrame = None) -> tuple[bool, str, dict]:
+def validate_refund(member_id: str, plan: str, coach_name: str, remarks: str = "", df_event: pd.DataFrame = None, df_member: pd.DataFrame = None, df_coach: pd.DataFrame = None) -> tuple[bool, str, dict]:
     """
     驗證退款資料
     Args:
@@ -76,6 +76,7 @@ def validate_refund(member_id: str, plan: str, coach_name: str, df_event: pd.Dat
             '匯款末五碼': "無",
             '交易日期': today,
             '交易時間': now_time,
+            '備註': remarks,
             # 前端顯示用
             # '顯示_剩餘堂數': remaining_count,
             # '顯示_剩餘金額': remaining_total,

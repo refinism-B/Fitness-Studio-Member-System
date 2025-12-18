@@ -57,6 +57,8 @@ def GET_DF_FROM_DB(sheet: str):
         dtype_dict['匯款末五碼'] = str
     if '會員編號' in headers:
         dtype_dict['會員編號'] = str
+    if '備註' in headers:
+        dtype_dict['備註'] = str
 
     df = pd.read_excel(io=db_path, sheet_name=sheet, dtype=dtype_dict)
 
