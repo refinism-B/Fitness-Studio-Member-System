@@ -1,23 +1,11 @@
 from pathlib import Path
-
 import pandas as pd
-from mod.O_config import DATABASE
-
-
-class CancelOperation(Exception):
-    """使用者手動取消操作"""
-    pass
+from mod.O_config import DATABASE, COACH, MEMBER_SHEET
 
 
 class InputError(Exception):
     """查無會員姓名或信箱時的錯誤訊息"""
     pass
-
-
-def check_cancel(check: str):
-    """輸入「*」可強制中止並取消當前操作"""
-    if check == "*":
-        raise CancelOperation("使用者取消")
 
 
 def get_project_root():
@@ -27,7 +15,10 @@ def get_project_root():
     return root_path
 
 
-def search_db(root: str, db_name: str) -> str:
+from functools import lru_cache
+
+@lru_cache(maxsize=1)
+def search_db(root: str, db_name: str) -> list[Path]:
     root = Path(root)
     search = f"**/{db_name}"
     result = list(root.rglob(search))
@@ -37,9 +28,10 @@ def search_db(root: str, db_name: str) -> str:
 
 def get_db_path(search_result: list[Path]) -> pd.DataFrame:
     if len(search_result) > 1:
-        print(f"錯誤！查詢到{len(search_result)}個資料庫")
+        # 這裡可以改為拋出異常或記錄 log，但在 web app 中 print 看不到
+        pass
     if len(search_result) == 0:
-        print(f"錯誤！查無資料庫")
+        raise FileNotFoundError(f"錯誤！查無資料庫: {DATABASE}")
 
     db_path = search_result[0]
 
@@ -50,13 +42,23 @@ def GET_DF_FROM_DB(sheet: str):
     root = get_project_root()
     search_result = search_db(root=root, db_name=DATABASE)
     db_path = get_db_path(search_result=search_result)
-    df_temp = pd.read_excel(io=db_path, sheet_name=sheet)
+
+    # 檢查檔案是否存在
+    if not db_path.exists():
+        raise FileNotFoundError(f"Database file not found at {db_path}")
+
+    # 優化：僅讀取 Header 以確認欄位，大幅減少 I/O
+    headers = pd.read_excel(io=db_path, sheet_name=sheet, nrows=0).columns
 
     dtype_dict = {}
-    if '電話' in df_temp.columns:
+    if '電話' in headers:
         dtype_dict['電話'] = str
-    if '匯款末五碼' in df_temp.columns:
+    if '匯款末五碼' in headers:
         dtype_dict['匯款末五碼'] = str
+    if '會員編號' in headers:
+        dtype_dict['會員編號'] = str
+    if '備註' in headers:
+        dtype_dict['備註'] = str
 
     df = pd.read_excel(io=db_path, sheet_name=sheet, dtype=dtype_dict)
 
@@ -68,28 +70,44 @@ def SAVE_TO_SHEET(df: pd.DataFrame, sheet: str):
     search_result = search_db(root=root, db_name=DATABASE)
     db_path = get_db_path(search_result=search_result)
 
-    while True:
-        try:
-            # 使用 ExcelWriter 的追加模式
-            with pd.ExcelWriter(
-                db_path,
-                engine="openpyxl",
-                mode="a",  # 追加模式
-                if_sheet_exists="replace"  # 覆蓋該 sheet
-            ) as writer:
-                df.to_excel(writer, sheet_name=sheet, index=False)
+    try:
+        # 使用 ExcelWriter 的追加模式
+        with pd.ExcelWriter(
+            db_path,
+            engine="openpyxl",
+            mode="a",  # 追加模式
+            if_sheet_exists="replace"  # 覆蓋該 sheet
+        ) as writer:
+            df.to_excel(writer, sheet_name=sheet, index=False)
 
-            # print(f"資料儲存成功！")
-            break
+        return True, "資料儲存成功！"
 
-        except PermissionError:
-            warning = input("存檔失敗，請確認檔案是否被開啟或使用。關閉後按enter重試。")
-            check_cancel(check=warning)
+    except PermissionError:
+        return False, "存檔失敗：檔案可能被開啟，請關閉 Excel 後重試。"
 
-        except CancelOperation as e:
-            print(f"{e}")
-            break
+    except Exception as e:
+        return False, f"發生錯誤：{str(e)}"
 
-        except Exception as e:
-            print(f"發生錯誤：{e}")
-            break
+
+def get_coach_id(coach: str, df_coach: pd.DataFrame = None) -> tuple[str, str]:
+    if df_coach is None:
+        df_coach = GET_DF_FROM_DB(sheet=COACH)
+
+    mask = (df_coach["姓名"] == coach)
+    if df_coach[mask].empty:
+        raise ValueError(f"查無教練資料: {coach}")
+
+    coach_id = df_coach[mask]["教練編號"].iloc[0]
+    coach_str = df_coach[mask]["會員編號"].iloc[0]
+    return coach_id, coach_str
+
+
+def get_member_name(member_id: str, df_member: pd.DataFrame = None) -> str:
+    if df_member is None:
+        df_member = GET_DF_FROM_DB(sheet=MEMBER_SHEET)
+
+    mask = (df_member["會員編號"] == member_id)
+    if df_member[mask].empty:
+        raise InputError("查無此會員資料")
+    member_name = df_member[mask]["會員姓名"].iloc[0]
+    return member_name

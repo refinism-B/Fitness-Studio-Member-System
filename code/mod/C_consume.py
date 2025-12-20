@@ -1,199 +1,126 @@
 from datetime import datetime
-
 import pandas as pd
 from mod import D_main_table as mt
 from mod import O_general as gr
 from mod.O_config import EVENT_SHEET
-from mod.O_general import CancelOperation, InputError, check_cancel
 
 
-def check_name_purchase(name: str, df_event: pd.DataFrame) -> bool:
-    mask = (df_event["會員姓名"] == name)
-    check_name = df_event[mask]
+def get_member_stock(member_id: str, plan: str, df_event: pd.DataFrame = None) -> pd.DataFrame:
+    """取得特定會員特定方案的庫存狀況"""
+    if df_event is None:
+        df_event = gr.GET_DF_FROM_DB(sheet=EVENT_SHEET)
+    # 使用 D_main_table 的邏輯計算剩餘堂數
+    df_sum = mt.get_sum_table(df_event)
 
-    if len(check_name) == 0:
-        print("查無購買紀錄，請確認會員姓名是否正確")
-        return False
+    mask1 = (df_sum["會員編號"] == member_id)
+    mask2 = (df_sum["方案"] == plan)
 
-    return True
-
-
-def input_name(df_event: pd.DataFrame):
-    name = input("請輸入上課會員姓名：")
-    check_cancel(check=name)
-
-    if check_name_purchase(name=name, df_event=df_event):
-        return True, name
-    else:
-        return False, None
+    return df_sum[mask1 & mask2]
 
 
-def check_email_purchase(name: str, email: str, df_event: pd.DataFrame) -> bool:
-    mask1 = (df_event["會員姓名"] == name)
-    mask2 = (df_event["Email"] == email)
-    check_mail = df_event[mask1 & mask2]
+def validate_consume_record(member_id_list: list[str], plan: str, coach: str, remarks: str = "", df_event: pd.DataFrame = None, df_member: pd.DataFrame = None, df_coach: pd.DataFrame = None) -> tuple[bool, str, dict]:
+    """
+    驗證上課(扣堂)紀錄 - 支援批次處理
+    Args:
+        member_id_list: 會員編號列表
+        plan: 方案
+        coach: 教練
+    Returns:
+        (success: bool, message: str, data_dict: dict)
+    """
+    try:
+        if not member_id_list:
+            return False, "請至少選擇一位會員", {}
 
-    if len(check_mail) == 0:
-        print("查無信箱購買紀錄，請確認會員Email是否正確")
-        return False
+        batch_data = []
+        error_messages = []
 
-    return True
+        batch_data = []
+        error_messages = []
+
+        # 取得教練ID一次即可
+        coach_id, _ = gr.get_coach_id(coach, df_coach=df_coach)
+        today = datetime.now().date().strftime("%Y-%m-%d")
+        now_time = datetime.now().time().strftime("%H:%M:%S")
+
+        for member_id in member_id_list:
+            # 1. 檢查是否有庫存
+            df_result = get_member_stock(member_id, plan, df_event=df_event)
+            try:
+                member_name = gr.get_member_name(member_id, df_member=df_member)
+            except Exception:
+                member_name = "未知會員"
+
+            if df_result.empty:
+                error_messages.append(f"{member_id} ({member_name}): 查無該方案購買紀錄")
+                continue
+
+            remaining_count = df_result["剩餘堂數"].iloc[0]
+            if remaining_count <= 0:
+                error_messages.append(f"{member_id} ({member_name}): 剩餘堂數不足 ({remaining_count})")
+                continue
+
+            # 2. 準備扣堂資料
+            avg_price = float(df_result["平均單堂金額"].iloc[0])
+            
+            consume_info = {
+                "會員編號": member_id,
+                "會員姓名": member_name,
+                "方案": plan,
+                "堂數": -1,
+                "單堂金額": avg_price,
+                "方案總金額": (avg_price * -1),
+                "教練": coach_id,
+                "付款方式": "上課",
+                "匯款末五碼": "無",
+                "交易日期": today,
+                "交易時間": now_time,
+                "備註": remarks
+            }
+            batch_data.append(consume_info)
+
+        if error_messages:
+            full_msg = "資料存取失敗：\n" + "\n".join(error_messages)
+            return False, full_msg, {}
+
+        return True, "驗證成功", {"batch_list": batch_data}
+
+    except Exception as e:
+        return False, f"系統錯誤：{str(e)}", {}
 
 
-def input_email(name: str, df_event: pd.DataFrame):
-    email = input("請輸入上課會員的Email：")
-    check_cancel(check=email)
-
-    if check_email_purchase(name=name, email=email, df_event=df_event):
-        return True, email
-    else:
-        return False, None
-
-
-def input_plan():
-    while True:
-        plan = input("請輸入購買方案：（A.一對一/B.一對二/C.團體）")
-        check_cancel(check=plan)
-
-        if plan in ["A", "a", "一對一"]:
-            return "A"
-        elif plan in ["B", "b", "一對二"]:
-            return "B"
-        elif plan in ["C", "c", "團體", "團課", "團體課程"]:
-            return "C"
+def execute_consume_record(data: dict, df_event: pd.DataFrame = None, df_member: pd.DataFrame = None) -> tuple[bool, str]:
+    """
+    執行新增上課(扣堂)紀錄 - 支援批次
+    Args:
+        data: 包含 "batch_list" key 的字典，或單一 record (兼容舊格式)
+    """
+    try:
+        # 3. 準備寫入資料
+        records = []
+        if "batch_list" in data:
+            records = data["batch_list"]
         else:
-            print("輸入錯誤，請重新輸入")
+            records = [data]
 
+        if df_event is None:
+            df_event = gr.GET_DF_FROM_DB(sheet=EVENT_SHEET)
+        df_new = pd.DataFrame(records)
+        df_event = pd.concat([df_event, df_new], ignore_index=True)
 
-def calculate_sum(df_event: pd.DataFrame):
-    df_sum = (df_event.groupby(["會員姓名", "Email", "方案"]).agg(
-        剩餘堂數=("堂數", "sum"),
-        剩餘預收款項=("方案總金額", "sum"),
-        最近交易日期=("交易日期", "last")
-    ).reset_index()
-    )
+        success, msg = gr.SAVE_TO_SHEET(df=df_event, sheet=EVENT_SHEET)
 
-    df_sum["平均單堂金額"] = (df_sum["剩餘預收款項"] / df_sum["剩餘堂數"]).round(2)
-    new_cols = ['會員姓名', 'Email', '方案', '剩餘堂數', '平均單堂金額', '剩餘預收款項', '最近交易日期']
-    df_sum = df_sum[new_cols]
+        if success:
+            # 4. 更新主表
+            try:
+                mt.D_update_main_data(df_event=df_event, df_member=df_member)
+            except Exception as e:
+                return True, f"上課紀錄儲存成功，但主表更新失敗: {e}"
 
-    return df_sum
-
-
-def search_result(df_sum: pd.DataFrame, name: str, email: str, plan: str) -> pd.DataFrame:
-    mask1 = (df_sum["會員姓名"] == name)
-    mask2 = (df_sum["Email"] == email)
-    mask3 = (df_sum["方案"] == plan)
-    df_result = df_sum[mask1 & mask2 & mask3]
-
-    return df_result
-
-
-def check_stock(df_result: pd.DataFrame) -> bool:
-    if len(df_result) > 0 and (df_result["剩餘堂數"] > 0).any():
-        return True
-    else:
-        return False
-
-
-def input_consume_record(name: str, email: str, plan: str, df_result: pd.DataFrame) -> dict:
-    price = float(df_result["平均單堂金額"].iloc[0])
-    today = datetime.now().date().strftime("%Y-%m-%d")
-    now_time = datetime.now().time().strftime("%H:%M:%S")
-
-    consume_info = {
-        "會員姓名": name,
-        "Email": email,
-        "方案": plan,
-        "堂數": -1,
-        "單堂金額": price,
-        "方案總金額": (price*(-1)),
-        "付款方式": "上課",
-        "匯款末五碼": "無",
-        "交易日期": today,
-        "交易時間": now_time
-    }
-
-    return consume_info
-
-
-def keep_order_or_not():
-    """確認是否繼續建立訂單"""
-    while True:
-        keep_or_not = input("是否繼續新增購買訂單？[Y/n]").lower()
-        if keep_or_not in ["n", ""]:
-            return False
-        elif keep_or_not == "y":
-            return True
+            count = len(records)
+            return True, f"成功新增 {count} 筆上課紀錄！"
         else:
-            print("輸入錯誤，請重新輸入")
+            return False, msg
 
-
-def build_consume_record(df_event: pd.DataFrame, df_sum: pd.DataFrame):
-    check, name = input_name(df_event=df_event)
-
-    if not check:
-        raise InputError("")
-
-    check, email = input_email(name=name, df_event=df_event)
-
-    if not check:
-        raise InputError("")
-
-    plan = input_plan()
-
-    df_result = search_result(df_sum=df_sum, name=name, email=email, plan=plan)
-
-    if not check_stock(df_result=df_result):
-        raise InputError("該會員該方案已無剩餘堂數，請確認後重新輸入")
-
-    consume_record = input_consume_record(
-        name=name, email=email, plan=plan, df_result=df_result)
-
-    return consume_record
-
-
-def build_consume_list():
-    df_event = gr.GET_DF_FROM_DB(sheet=EVENT_SHEET)
-    df_sum = calculate_sum(df_event=df_event)
-
-    consume_list = []
-
-    while True:
-        try:
-            consume_record = build_consume_record(
-                df_event=df_event, df_sum=df_sum)
-            consume_list.append(consume_record)
-
-            keep = keep_order_or_not()
-            if not keep:
-                return consume_list
-
-        except CancelOperation as e:
-            print(f"{e}")
-            return consume_list
-
-        except InputError as e:
-            print(f"{e}")
-            return consume_list
-
-
-def C_consume_course():
-    # 讀取會員表
-    df_event = gr.GET_DF_FROM_DB(sheet=EVENT_SHEET)
-
-    # 輸入消費資料，建立列表
-    consume_list = build_consume_list()
-
-    # 組成暫時df
-    df_temp = pd.DataFrame(consume_list)
-
-    # 與主表合併
-    df_event = pd.concat([df_event, df_temp], ignore_index=True)
-
-    # 存檔
-    gr.SAVE_TO_SHEET(df=df_event, sheet=EVENT_SHEET)
-
-    # 更新主表
-    mt.D_update_main_data()
-    print("新增上課紀錄，資料已儲存！")
+    except Exception as e:
+        return False, f"系統錯誤：{str(e)}"
