@@ -43,7 +43,7 @@ df_menu = data_snapshot["menu"]
 df_main = data_snapshot["main"]
 
 
-st.set_page_config(page_title="沛力訓練會員系統", layout="wide")
+st.set_page_config(page_title="健身訓練會員系統", layout="wide")
 
 # Sidebar Navigation
 st.sidebar.title("功能選單")
@@ -238,7 +238,7 @@ if "confirm_data" in st.session_state and st.session_state.confirm_data is not N
 # --- Page: 首頁總覽 ---
 if page == "首頁":
     st.title("📊 首頁")
-    st.subheader("歡迎使用沛力訓練會員系統！\n請選擇左側功能或下方登入管理員")
+    st.subheader("歡迎使用健身訓練會員系統！\n請選擇左側功能或下方登入管理員")
 
     st.divider()
 
