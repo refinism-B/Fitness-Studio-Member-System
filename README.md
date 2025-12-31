@@ -1,10 +1,10 @@
 # 簡易會員管理系統
 
-![Python](https://img.shields.io/badge/Python-3.11%2B-blue) ![Streamlit](https://img.shields.io/badge/GUI-Streamlit-red)
+![Python](https://img.shields.io/badge/Python-3.11%2B-blue) ![Streamlit](https://img.shields.io/badge/GUI-Streamlit-red) ![Cloud](https://img.shields.io/badge/Deployment-Streamlit%20Cloud-orange) ![Database](https://img.shields.io/badge/Database-Google%20Sheets-green)
 
 ## 目錄（Menu）
 - [簡介（Overview）](#簡介overview)
-- [特殊需求（Demand）](#特殊需求demand)
+- [雲端部署（Cloud Deployment）](#雲端部署cloud-deployment)
 - [技術與工具（Tech Stack）](#技術與工具tech-stack)
 - [使用方式（Usage）](#使用方式usage)
 - [資料庫（Database）](#資料庫database)
@@ -14,44 +14,53 @@
 
 ## 簡介（Overview）
 本專案目的為建立一個小型、易用的資料庫系統，管理會員資料及記錄會員活動。並使用Python開發後端功能操作資料庫，將繁瑣的流程簡化，節省文書工作時間。
+除了可於地端執行外，本專案已優化為**可部署至 Streamlit Cloud** 的版本，方便多裝置存取使用。
 
 <br>
 
-## 特殊需求（Demand）
-本專案為受委託開發，除了基本需求外，還有一些額外前提必須遵守。
+## 雲端部署（Cloud Deployment）
+本專案已支援雲端部署，透過 Streamlit Cloud 託管應用程式，並連接 Google Sheets 作為雲端資料庫。
+使用者僅需透過網頁連結即可操作，無須在地端安裝任何軟體或環境。
 
-1. 委託單位中並無技術人員，也無人能夠進行維護。
-2. 考量預算及需求後，暫無上雲需求，一切以地端部署為主。
+- **線上試用連結**：[https://fitness-studio-member-system.streamlit.app/](https://fitness-studio-member-system.streamlit.app/)
 
 <br>
 
 ## 技術與工具（Tech Stack）
 - 程式語言：**Python**
-- 資料庫：**Excel***
+- 資料庫：**Google Sheets**
 - GUI：**Streamlit**
-
-<i><font size="2">*考量委託單位中並無技術人員，故選擇泛用檔案作為資料庫。[資料庫](#資料庫database)欄目中有更詳細說明。</font></i>
+- 部署環境：**Streamlit Cloud Community**
 
 <br>
 
 ## 使用方式（Usage）
-已製作快速啟動指令，使用者可快速啟用。
-1. 下載專案repository。
-2. 使用`pip install -r requirements.txt`安裝依賴套件。
-3. 雙擊`main.bat`會自動執行啟動指令，開啟瀏覽器進入操作介面（預設為localhost:8501）
+### 雲端版本
+直接點擊 Streamlit Cloud 提供的應用程式連結即可開始使用：[健身訓練會員系統](https://fitness-studio-member-system.streamlit.app/)
+
+### 地端開發/測試（Local Development）
+若需在地端開發或測試：
+1. 下載專案 repository。
+2. 準備 `.streamlit/secrets.toml` 文件並配置 Google Sheets API 憑證。
+3. 使用 `pip install -r requirements.txt` 安裝依賴套件。
+4. 執行 `streamlit run streamlit_app.py` 啟動服務。
 
 <br>
 
 ## 資料庫（Database）
-存放於專案目錄中的**Excel檔案**。系統會根據檔名自動搜尋定位 *（故請勿擅自更改檔名）*。
-- **技術選型**：委託單位中無技術人員，為避免特殊情形或意外發生時，無人可以解決的情形，故選擇泛用的Excel檔案作為資料庫。兼顧**程式操作的便利性**以及**一般使用者也可快速查看更改**的特性。
-- **資料庫架構**：將檔案視為database、分頁視為table來操作。檔案中有以下分頁：
-    1. **A_main**：會員結算資料，按照**會員編號**和**方案**進行分類結算，查看剩餘堂數與金額。
-    2. **B_event**：會員活動記錄，當會員進行**購買**或**上課**時，會新增記錄在此分頁。
-    3. **C_member**：會員資料，新增會員時需登記一些基本資料，記錄在此分頁。
-    4. **menu**：課程價目表，為**靜態資料**，使用者有需要時才會手動更改。
-    5 **coach**：教練名單列表，包含教練名稱與編號。為**靜態資料**，有需要才會手動更改。
-- **注意事項**：直接修改Excel雖然快速靈活，但相對若無人管理可能會變得**混亂**甚至**錯誤**。建議仍主要透過程式操作，必要時才直接修改Excel，保持資料的一致和正確性。
+本專案改用 **Google Sheets** 作為雲端資料庫，方便即時查看與協作。
+
+- **測試資料庫連結**：[Google Sheets 範例](https://docs.google.com/spreadsheets/d/11bQVn6ioxgdsAsXSq8yfG-9EMBvBGS852gkK9nnvRQo/edit?usp=sharing)
+  > **注意**：此為測試檢視連結，所有人均可查看資料變動（例如透過系統新增會員後，此表會即時更新），但無權限直接編輯試算表。
+
+- **資料庫架構**：將 Google Sheet 的分頁（Sheets）視為 Tables 操作：
+    1. **A_main**：會員結算資料，查看剩餘堂數與金額。每次異動自動更新。
+    2. **B_event**：會員活動記錄（購買、上課、退費）。
+    3. **C_member**：會員基本資料。
+    4. **menu**：課程價目表（靜態設定）。
+    5. **coach**：教練名單（靜態設定）。
+
+- **注意事項**：系統操作會同步寫入此 Google Sheet。為避免資料不一致，建議主要透過本系統介面進行資料增刪改，而非直接編輯試算表。
 
 <br>
 
@@ -87,7 +96,7 @@
 
 ### 其他功能
 
-- **手動結算**：若直接開啟並修改Excel則不會觸發自動結算。需點擊**手動更新**功能才會觸發結算。
+- **手動更新**：點擊「手動更新」按鈕，系統會重新從 Google Sheets 讀取所有交易與會員紀錄，重新計算並覆寫主表（A_main）。當有人直接修改了 Google Sheets 內容後，可利用此功能強制同步系統狀態。
 - **會員退款**：輸入會員編號及方案後會查詢剩餘堂數與金額，若確認退款，系統會新增一筆資料，**將該會員該方案的堂數與金額都扣除（歸零）**。
 
 ![會員退款](https://i.meee.com.tw/ECuH0Ug.png)
@@ -98,9 +107,9 @@
 ![登入系統](https://i.meee.com.tw/ADbUnNL.png)
 <br>
 
-- **備份機制**：當使用者使用「**新增會員、購買課程、會員上課、會員退款、手動更新**」等功能並成功後會觸發**備份機制**，自動將當前Excel檔案複製一份至`backup`資料夾中。系統將保留**最多50個備份檔案**，若達到上限會自動從最舊的開始刪除。
+> **注意**：雲端版本因環境限制，已移除**自動備份至本地**的功能。Google Sheets 本身即具備版本紀錄（History），可隨時還原至先前的狀態。
 
 <br>
 
 ## 補充（Notes）
-關於專案架構與技術細節請參考專案目錄中`docs`資料夾下的`專案架構說明書.md`檔案。
+關於詳細程式架構請參考專案目錄中`docs`資料夾下的`專案架構說明書.md`檔案。
