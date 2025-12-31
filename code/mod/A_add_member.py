@@ -92,7 +92,7 @@ def validate_add_member(member_id: str, name: str, birthday: str, phone: str, co
             df_member = gr.GET_DF_FROM_DB(sheet=MEMBER_SHEET)
         try:
             coach_id, coach_str = gr.get_coach_id(coach, df_coach=df_coach)
-            member_id_formatted = str(coach_str) + str(member_id)
+            member_id_formatted = str(coach_str).replace(".0", "") + str(member_id)
         except Exception as e:
             return False, f"取得教練資料失敗: {str(e)}", {}
 

@@ -27,6 +27,9 @@ def GET_DF_FROM_DB(sheet: str):
             if col in df.columns:
                 # fillna("") 確保空值轉字串後不會變成 "nan"
                 df[col] = df[col].fillna("").astype(dtype)
+                # 針對字串欄位，移除可能的 ".0" 結尾 (源自 float 轉 str)
+                if dtype == str:
+                    df[col] = df[col].astype(str).str.replace(r'\.0$', '', regex=True)
                 
         return df
     except Exception as e:
