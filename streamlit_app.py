@@ -10,7 +10,7 @@ import streamlit as st
 from mod import G_birthday as bt
 from mod.O_config import MAIN_SHEET, MEMBER_SHEET, EVENT_SHEET, COACH, MENU, ADMIN_PASSWORD
 from mod import O_general as gr
-from mod import O_backup  # Added backup module
+
 from mod import F_refund
 from mod import E_customized_course
 from mod import D_main_table
@@ -198,12 +198,7 @@ def run_confirmation_dialog():
             if success:
                 st.success(msg)
 
-                # Auto Backup
-                bk_success, bk_msg = O_backup.backup_flow()
-                if bk_success:
-                    st.toast(f"✅ 自動備份成功 ({bk_msg})")
-                else:
-                    st.error(f"⚠️ 自動備份失敗: {bk_msg}")
+
 
                 # Clear confirmation state
                 del st.session_state.confirm_data
@@ -561,12 +556,7 @@ elif page == "手動更新":
         if success:
             st.success(msg)
 
-            # Auto Backup
-            bk_success, bk_msg = O_backup.backup_flow()
-            if bk_success:
-                st.toast(f"✅ 自動備份成功 ({bk_msg})")
-            else:
-                st.error(f"⚠️ 自動備份失敗: {bk_msg}")
+
 
             st.cache_data.clear()
             # Reload happens on rerun, but we can't rerun immediately if we want to show success msg first?

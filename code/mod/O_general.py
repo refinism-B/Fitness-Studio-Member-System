@@ -1,6 +1,6 @@
-from pathlib import Path
 import pandas as pd
-from mod.O_config import DATABASE, COACH, MEMBER_SHEET
+from mod.O_config import COACH, MEMBER_SHEET
+from mod import O_connect_to_gsheet as gs
 
 
 class InputError(Exception):
@@ -8,82 +8,39 @@ class InputError(Exception):
     pass
 
 
-def get_project_root():
-    current_path = Path(__file__).resolve()
-    root_path = current_path.parent.parent.parent
-
-    return root_path
-
-
-from functools import lru_cache
-
-@lru_cache(maxsize=1)
-def search_db(root: str, db_name: str) -> list[Path]:
-    root = Path(root)
-    search = f"**/{db_name}"
-    result = list(root.rglob(search))
-
-    return result
-
-
-def get_db_path(search_result: list[Path]) -> pd.DataFrame:
-    if len(search_result) > 1:
-        # 這裡可以改為拋出異常或記錄 log，但在 web app 中 print 看不到
-        pass
-    if len(search_result) == 0:
-        raise FileNotFoundError(f"錯誤！查無資料庫: {DATABASE}")
-
-    db_path = search_result[0]
-
-    return db_path
-
-
 def GET_DF_FROM_DB(sheet: str):
-    root = get_project_root()
-    search_result = search_db(root=root, db_name=DATABASE)
-    db_path = get_db_path(search_result=search_result)
-
-    # 檢查檔案是否存在
-    if not db_path.exists():
-        raise FileNotFoundError(f"Database file not found at {db_path}")
-
-    # 優化：僅讀取 Header 以確認欄位，大幅減少 I/O
-    headers = pd.read_excel(io=db_path, sheet_name=sheet, nrows=0).columns
-
-    dtype_dict = {}
-    if '電話' in headers:
-        dtype_dict['電話'] = str
-    if '匯款末五碼' in headers:
-        dtype_dict['匯款末五碼'] = str
-    if '會員編號' in headers:
-        dtype_dict['會員編號'] = str
-    if '備註' in headers:
-        dtype_dict['備註'] = str
-
-    df = pd.read_excel(io=db_path, sheet_name=sheet, dtype=dtype_dict)
-
-    return df
+    """
+    從 Google Sheet 讀取資料並轉換為 DataFrame
+    """
+    try:
+        df = gs.read_sheet_as_df(sheet)
+        
+        # 強制轉換特定欄位為字串，避免自動轉型
+        col_types = {
+            '電話': str,
+            '匯款末五碼': str,
+            '會員編號': str,
+            '備註': str
+        }
+        
+        for col, dtype in col_types.items():
+            if col in df.columns:
+                # fillna("") 確保空值轉字串後不會變成 "nan"
+                df[col] = df[col].fillna("").astype(dtype)
+                
+        return df
+    except Exception as e:
+        # 若是第一次讀取或連線失敗，可能需要拋出錯誤讓上層處理
+        raise FileNotFoundError(f"讀取 Sheet {sheet} 失敗: {str(e)}")
 
 
 def SAVE_TO_SHEET(df: pd.DataFrame, sheet: str):
-    root = get_project_root()
-    search_result = search_db(root=root, db_name=DATABASE)
-    db_path = get_db_path(search_result=search_result)
-
+    """
+    將 DataFrame 寫回 Google Sheet
+    """
     try:
-        # 使用 ExcelWriter 的追加模式
-        with pd.ExcelWriter(
-            db_path,
-            engine="openpyxl",
-            mode="a",  # 追加模式
-            if_sheet_exists="replace"  # 覆蓋該 sheet
-        ) as writer:
-            df.to_excel(writer, sheet_name=sheet, index=False)
-
+        gs.update_sheet(sheet_name=sheet, updated_df=df)
         return True, "資料儲存成功！"
-
-    except PermissionError:
-        return False, "存檔失敗：檔案可能被開啟，請關閉 Excel 後重試。"
 
     except Exception as e:
         return False, f"發生錯誤：{str(e)}"

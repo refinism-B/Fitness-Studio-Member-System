@@ -13,7 +13,7 @@ conn = conn_to_gsheets()
 
 def read_sheet_as_df(sheet_name, conn=conn):
     """讀取特定名稱的sheet分頁"""
-    df_students = conn.read(worksheet=sheet_name, ttl="10m")
+    df_students = conn.read(worksheet=sheet_name, ttl=0)
 
     return df_students
 
@@ -23,7 +23,7 @@ def read_all_sheets(sheet_list, conn=conn):
     all_data = {}
 
     for tab in sheet_list:
-        all_data[tab] = conn.read(worksheet=tab, ttl="1h")
+        all_data[tab] = conn.read(worksheet=tab, ttl=0)
 
     return all_data
 
