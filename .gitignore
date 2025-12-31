@@ -209,5 +209,8 @@ __marimo__/
 
 PERI_member_database.xlsx
 .xlsx
-temp/
+docs/prompt.md
 backup/
+key/
+poetry.lock
+pyproject.toml
