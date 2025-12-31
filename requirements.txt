@@ -1,0 +1,10 @@
+streamlit==1.52.2
+altair==6.0.0
+pandas==2.3.3
+numpy==2.3.5
+openpyxl==3.1.5
+st-gsheets-connection==0.1.0
+gspread==5.12.4
+gspread-dataframe==4.0.0
+requests==2.32.5
+python-dotenv==1.2.1
