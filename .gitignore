@@ -211,3 +211,6 @@ PERI_member_database.xlsx
 .xlsx
 docs/prompt.md
 backup/
+key/
+poetry.lock
+pyproject.toml
