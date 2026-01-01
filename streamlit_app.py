@@ -19,7 +19,7 @@ from mod import B_purchase
 from mod import A_add_member
 
 
-@st.cache_data
+@st.cache_data(show_spinner=False)
 def load_all_data():
     df_member = gr.GET_DF_FROM_DB(MEMBER_SHEET)
     df_event = gr.GET_DF_FROM_DB(EVENT_SHEET)
@@ -35,7 +35,10 @@ def load_all_data():
     }
 
 # Load data once
-data_snapshot = load_all_data()
+with st.status("正在讀取資料庫...", expanded=True) as status:
+    data_snapshot = load_all_data()
+    status.update(label="資料讀取完成！", state="complete", expanded=False)
+
 df_member = data_snapshot["member"]
 df_event = data_snapshot["event"]
 df_coach = data_snapshot["coach"]
@@ -193,12 +196,35 @@ def run_confirmation_dialog():
     if col1.button("確認送出", type="primary", use_container_width=True):
         func = get_execute_func(action)
         if func:
-            # Execute always reads fresh data (arguments not passed) for safety
-            success, msg = func(data)
+            # Execute with status feedback
+            with st.status("正在寫入資料庫...", expanded=True) as status:
+                success, msg = func(data)
+                if success:
+                     status.update(label="寫入成功！", state="complete", expanded=False)
+                else:
+                     status.update(label="寫入失敗", state="error", expanded=False)
+
             if success:
                 st.success(msg)
 
-
+                # Define keys to clear based on action
+                keys_to_clear = []
+                if action == "add_member":
+                    keys_to_clear = ["add_m_id", "add_m_phone", "add_m_coach", "add_m_name", "add_m_birthday", "add_m_remarks"]
+                elif action == "purchase":
+                     keys_to_clear = ["purchase_normal_member", "purchase_normal_plan", "purchase_normal_payment", "purchase_normal_coach", 
+                                      "purchase_normal_count", "purchase_normal_account", "purchase_normal_remarks"]
+                elif action == "customized_purchase":
+                     keys_to_clear = ["purchase_custom_member", "purchase_custom_count", "purchase_custom_payment", "purchase_custom_coach",
+                                      "purchase_custom_price", "purchase_custom_account", "purchase_custom_remarks"]
+                elif action == "consume":
+                     keys_to_clear = ["consume_members", "consume_coach", "consume_plan", "consume_remarks"]
+                elif action == "refund":
+                     keys_to_clear = ["refund_members", "refund_coach", "refund_plan", "refund_remarks"]
+                
+                for k in keys_to_clear:
+                    if k in st.session_state:
+                        del st.session_state[k]
 
                 # Clear confirmation state
                 del st.session_state.confirm_data
@@ -262,18 +288,19 @@ elif page == "新增會員":
     with st.form("add_member_form"):
         col1, col2 = st.columns(2)
         with col1:
-            member_id = st.text_input("會員編號", placeholder='請輸入二至三位數編號（不含教練編號）')
-            phone = st.text_input("電話", placeholder='請輸入十位數電話號碼')
+            member_id = st.text_input("會員編號", placeholder='請輸入二至三位數編號（不含教練編號）', key="add_m_id")
+            phone = st.text_input("電話", placeholder='請輸入十位數電話號碼', key="add_m_phone")
             coach = st.selectbox(
                 "負責教練", coach_list,
                 format_func=lambda x: f"{x}",
                 index=None,
-                placeholder='請選擇教練')
+                placeholder='請選擇教練',
+                key="add_m_coach")
         with col2:
-            name = st.text_input("會員姓名", placeholder='請輸入會員姓名，中英文不限')
+            name = st.text_input("會員姓名", placeholder='請輸入會員姓名，中英文不限', key="add_m_name")
             birthday = st.date_input(
-                "生日", min_value=min_date, max_value=max_date)
-            remarks = st.text_input("備註", max_chars=50, placeholder="最多50字元")
+                "生日", min_value=min_date, max_value=max_date, key="add_m_birthday")
+            remarks = st.text_input("備註", max_chars=50, placeholder="最多50字元", key="add_m_remarks")
 
         submitted = st.form_submit_button("確認送出")
 
@@ -344,19 +371,20 @@ elif page == "購買課程":
                     key="purchase_normal_member"
                 )
                 plan = st.selectbox(
-                    "購買方案", plan_list, format_func=lambda x: f"{x}", index=None, placeholder='請選擇購買方案')
+                    "購買方案", plan_list, format_func=lambda x: f"{x}", index=None, placeholder='請選擇購買方案', key="purchase_normal_plan")
                 payment = st.selectbox(
-                    "付款方式", ["現金", "匯款"], index=None, placeholder='請選擇付款方式')
+                    "付款方式", ["現金", "匯款"], index=None, placeholder='請選擇付款方式', key="purchase_normal_payment")
             with col2:
                 coach = st.selectbox(
                     "教練", coach_list,
                     format_func=lambda x: f"{x}",
                     index=None,
-                    placeholder='請選擇教練')
+                    placeholder='請選擇教練',
+                    key="purchase_normal_coach")
                 count_selection = st.selectbox(
-                    "購買堂數", ["1", "4", "8", "16"], index=None, placeholder='請選擇購買堂數')
+                    "購買堂數", ["1", "4", "8", "16"], index=None, placeholder='請選擇購買堂數', key="purchase_normal_count")
                 account_id = st.text_input(
-                    "匯款末五碼", placeholder='輸入匯款帳號末五碼，若是現金付款請留空')
+                    "匯款末五碼", placeholder='輸入匯款帳號末五碼，若是現金付款請留空', key="purchase_normal_account")
                 remarks = st.text_input("備註", max_chars=50, placeholder="最多50字元", key="purchase_normal_remarks")
 
             submitted = st.form_submit_button("確認送出")
@@ -394,19 +422,20 @@ elif page == "購買課程":
                 )
                 # 特殊課程不需選擇方案，強制固定
                 count_selection = st.number_input(
-                    "購買堂數", step=1, placeholder="請輸入購買堂數")
+                    "購買堂數", step=1, placeholder="請輸入購買堂數", key="purchase_custom_count")
                 payment = st.selectbox(
-                    "付款方式", ["現金", "匯款"], index=None, placeholder='請選擇付款方式')
+                    "付款方式", ["現金", "匯款"], index=None, placeholder='請選擇付款方式', key="purchase_custom_payment")
 
             with col2:
                 coach = st.selectbox(
                     "教練", coach_list,
                     format_func=lambda x: f"{x}",
                     index=None,
-                    placeholder='請選擇教練')
-                price = st.number_input("單堂金額", step=50, placeholder="請輸入單堂金額")
+                    placeholder='請選擇教練',
+                    key="purchase_custom_coach")
+                price = st.number_input("單堂金額", step=50, placeholder="請輸入單堂金額", key="purchase_custom_price")
                 account_id = st.text_input(
-                    "匯款末五碼", placeholder='輸入匯款帳號末五碼，若是現金付款請留空')
+                    "匯款末五碼", placeholder='輸入匯款帳號末五碼，若是現金付款請留空', key="purchase_custom_account")
                 remarks = st.text_input("備註", max_chars=50, placeholder="最多50字元", key="purchase_custom_remarks")
 
             submitted = st.form_submit_button("確認送出")
@@ -445,18 +474,20 @@ elif page == "會員上課":
             selected_members = st.multiselect(
                 "選擇會員 (可多選)",
                 member_selection_list,
-                placeholder='請搜尋並選擇會員'
+                placeholder='請搜尋並選擇會員',
+                key="consume_members"
             )
 
             coach = st.selectbox(
                 "教練", coach_list,
                 format_func=lambda x: f"{x}",
                 index=None,
-                placeholder='請選擇教練')
+                placeholder='請選擇教練',
+                key="consume_coach")
 
         with col2:
             plan = st.selectbox(
-                "上課方案", consume_list, format_func=lambda x: f"{x}", index=None, placeholder='請選擇上課方案')
+                "上課方案", consume_list, format_func=lambda x: f"{x}", index=None, placeholder='請選擇上課方案', key="consume_plan")
             remarks = st.text_input("備註", max_chars=50, placeholder="最多50字元", key="consume_remarks")
 
         submitted = st.form_submit_button("確認送出")
@@ -498,18 +529,20 @@ elif page == "會員退款":
                 "選擇會員 (單選)",
                 member_selection_list,
                 placeholder='請選擇一位會員',
-                max_selections=1
+                max_selections=1,
+                key="refund_members"
             )
 
             coach = st.selectbox(
                 "確認教練", coach_list,
                 format_func=lambda x: f"{x}",
                 index=None,
-                placeholder='請選擇退款教練')
+                placeholder='請選擇退款教練',
+                key="refund_coach")
 
         with col2:
             plan = st.selectbox(
-                "退款方案", consume_list, format_func=lambda x: f"{x}", index=None, placeholder='請選擇要退款的方案')
+                "退款方案", consume_list, format_func=lambda x: f"{x}", index=None, placeholder='請選擇要退款的方案', key="refund_plan")
             remarks = st.text_input("備註", max_chars=50, placeholder="最多50字元", key="refund_remarks")
 
         submitted = st.form_submit_button("確認退款內容")
@@ -552,7 +585,13 @@ elif page == "手動更新":
 
     if st.button("執行更新"):
         # Manual update reads fresh, so no arguments
-        success, msg = D_main_table.D_update_main_data()
+        with st.status("正在更新主表...", expanded=True) as status:
+            success, msg = D_main_table.D_update_main_data()
+            if success:
+                status.update(label="更新成功！", state="complete", expanded=False)
+            else:
+                status.update(label="更新失敗", state="error", expanded=False)
+
         if success:
             st.success(msg)
 
