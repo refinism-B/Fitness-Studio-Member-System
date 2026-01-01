@@ -11,9 +11,9 @@ def conn_to_gsheets():
 conn = conn_to_gsheets()
 
 
-def read_sheet_as_df(sheet_name, conn=conn):
+def read_sheet_as_df(sheet_name, conn=conn, ttl=0):
     """讀取特定名稱的sheet分頁"""
-    df_students = conn.read(worksheet=sheet_name, ttl=0)
+    df_students = conn.read(worksheet=sheet_name, ttl=ttl)
 
     return df_students
 
